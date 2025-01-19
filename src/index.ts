@@ -17,7 +17,7 @@ type Track = {
     file:       string
 };
 
-const TEMP_PATH = `D:/Music/mp3`;
+const TEMP_PATH = `/home/nostalgia3/Music/`;
 
 class App extends utils.TypedEventEmitter<{
     click: [number, number, number, boolean],
@@ -214,6 +214,16 @@ class App extends utils.TypedEventEmitter<{
 
         this.rend.box(0, 0, this.ui.trackWidth, this.ui.trackHeight, 'Tracks', gfore);
 
+        this.rend.clearText(
+            1, 1,
+            this.ui.trackWidth-2, this.ui.trackHeight-2
+        );
+
+        if(this.tracks.length == 0) {
+            if(flush) this.rend.flush();
+            return;
+	    }
+
         // This is "slow", but unless the track list is absolutely massive,
         // this should be fine
         const longestTrackTitle = this.tracks
@@ -239,10 +249,15 @@ class App extends utils.TypedEventEmitter<{
         }
 
         // Track scrubber
-        const tChar = Math.floor(this.tracks.length/(this.ui.trackHeight-2));
-        const j     = Math.ceil(this.trackOff/tChar);
-        this.rend.vline(this.ui.trackWidth-2, 1, this.ui.trackHeight-2, afore, undefined, '▐');
-        this.rend.vline(this.ui.trackWidth-2, 1+j, 2, gfore, undefined, '▐');
+        if(this.tracks.length < this.ui.trackHeight-2) {
+            this.rend.vline(this.ui.trackWidth-2, 1, this.ui.trackHeight-2, gfore, undefined, '▐');
+        } else {
+            const percentScrolled = (this.trackOff)/(this.tracks.length);
+            const size = Math.floor((this.ui.trackHeight-2)/this.tracks.length*(this.ui.trackHeight-2));
+            const offset = Math.ceil((this.ui.trackHeight-2) * percentScrolled);
+            this.rend.vline(this.ui.trackWidth-2, 1, this.ui.trackHeight-2, afore, undefined, '▐');
+            this.rend.vline(this.ui.trackWidth-2, 1+offset, size, gfore, undefined, '▐');
+        }
 
         if(flush) this.rend.flush();
     }
@@ -337,15 +352,15 @@ class App extends utils.TypedEventEmitter<{
     }
 
     trackUp() {
-        if(this.trackOff <= 0) {
+        if((this.trackSel) <= 0) {
             // utils.bell();
         } else if((this.trackSel-this.trackOff) > 0) {
             this.trackSel--;
-            this.render();
+            this.drawTracks();
         } else {
             this.trackSel--;
             this.trackOff--;
-            this.render();
+            this.drawTracks();
         }
     }
 
@@ -354,17 +369,16 @@ class App extends utils.TypedEventEmitter<{
             // utils.bell();
         } else if((this.trackSel-this.trackOff) < this.ui.trackHeight-3) {
             this.trackSel++;
-            this.render();
+            this.drawTracks();
         } else {
             this.trackOff++; this.trackSel++;
-            this.render();
+            this.drawTracks();
         }
     }
 
     scrollUp(c=1) {
         for(let i=0;i<c;i++) {
             if(this.trackOff <= 0) {
-                // utils.bell();
                 break;
             } else {
                 this.trackOff--;
@@ -386,11 +400,15 @@ class App extends utils.TypedEventEmitter<{
         }
     }
 
+    playAt() {
+        this.player.loadFile(TEMP_PATH + this.tracks[this.trackSel].file);
+        this.player.play(0);
+    }
+
     selectWithOffset(x: number) {
         if(this.tracks[this.trackOff + x]) {
             if(this.trackSel == this.trackOff + x) {
-                this.player.loadFile(TEMP_PATH + this.tracks[this.trackSel].file);
-                this.player.play(0);
+                this.playAt();
             } else {
                 this.trackSel = this.trackOff + x;
             }
@@ -432,7 +450,7 @@ app.on('scroll', (count, x, y) => {
             app.scrollUp(5);
         }
 
-        app.render();
+        app.drawTracks();
     }
 });
 

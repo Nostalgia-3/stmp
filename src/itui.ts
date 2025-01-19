@@ -64,7 +64,8 @@ ui.layout(
             color: color([255,255,255])
         }),
         ui.rectangle('ProfilePictureOuter', {
-
+            w: size_static(20), h: size_grow(),
+            color: color()
         })
     ])
 );

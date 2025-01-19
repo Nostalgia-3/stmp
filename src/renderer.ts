@@ -45,6 +45,10 @@ export class Renderer {
         }
     }
 
+    clearText(x: number, y: number) {
+        
+    }
+
     clear(bg: utils.Gradient) {
         for(let i=0;i<this.height;i++) {
             const col = utils.interpolate(bg[0], bg[1], i/this.height);

@@ -1,13 +1,13 @@
 import { getLibrary, TypedEventEmitter } from "./utils.ts";
 
-export const { symbols: sdl2, close: sdl2_close } = Deno.dlopen(getLibrary('sdl2'), {
-    SDL_Init: {
-        parameters: ['u32'],
-        result: 'i32'
-    }
-});
+let sdl2: Deno.StaticForeignLibraryInterface<{
+    readonly SDL_Init: {
+        readonly parameters: readonly ["u32"];
+        readonly result: "i32";
+    };
+}>;
 
-export const { symbols: mixer, close: mixer_close } = Deno.dlopen(getLibrary('SDL2_mixer', './resources/'), {
+let mixer: Deno.StaticForeignLibraryInterface<{
     Mix_OpenAudio:          { parameters: ['i32', 'u16', 'i32', 'i32'], result: 'i32' },
     Mix_VolumeMusic:        { parameters: ['i32'], result: 'i32' }, // Volume (0 -> MIX_MAX_VOLUME)
     Mix_LoadMUS:            { parameters: ['buffer'], result: 'pointer' },
@@ -18,13 +18,43 @@ export const { symbols: mixer, close: mixer_close } = Deno.dlopen(getLibrary('SD
     Mix_SetMusicPosition:   { parameters: ['f64'], result: 'i32' },
     Mix_GetMusicPosition:   { parameters: ['pointer'], result: 'f64' },
     Mix_MusicDuration:      { parameters: ['pointer'], result: 'f64' }
-});
+}>;
+
+try {
+    const { symbols } = Deno.dlopen(getLibrary('SDL2'), {
+        SDL_Init: {
+            parameters: ['u32'],
+            result: 'i32'
+        }
+    });
+    sdl2 = symbols;
+} catch {
+    console.error(`Failed to find ${getLibrary('SDL2')}; make sure it's installed`);
+    Deno.exit();
+}
+
+try {
+    const { symbols } = Deno.dlopen(getLibrary('SDL2_mixer'), {
+        Mix_OpenAudio:          { parameters: ['i32', 'u16', 'i32', 'i32'], result: 'i32' },
+        Mix_VolumeMusic:        { parameters: ['i32'], result: 'i32' }, // Volume (0 -> MIX_MAX_VOLUME)
+        Mix_LoadMUS:            { parameters: ['buffer'], result: 'pointer' },
+        Mix_PlayMusic:          { parameters: ['pointer', 'i32'], result: 'i32' },
+        Mix_FreeMusic:          { parameters: ['pointer'], result: 'void' },
+        Mix_PauseMusic:         { parameters: [], result: 'void' },
+        Mix_ResumeMusic:        { parameters: [], result: 'void' },
+        Mix_SetMusicPosition:   { parameters: ['f64'], result: 'i32' },
+        Mix_GetMusicPosition:   { parameters: ['pointer'], result: 'f64' },
+        Mix_MusicDuration:      { parameters: ['pointer'], result: 'f64' }
+    });
+    mixer = symbols;
+} catch {
+    console.error(`Failed to find ${getLibrary('SDL2_mixer')}; make sure it's installed`);
+    Deno.exit();
+}
 
 export function asCString(str: string): Uint8Array {
     return new TextEncoder().encode(`${str}\0`);
 }
-
-const MAX_VOLUME = 128;
 
 /**
  * An abstracted music player.

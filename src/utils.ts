@@ -2,13 +2,15 @@ import { Buffer } from 'node:buffer';
 import { writeAllSync } from 'https://deno.land/std@0.216.0/io/write_all.ts';
 
 export function getLibrary(s: string, path?: string) {
-    let prefix = '.so';
+    let suffix = '.so';
+    let prefix = 'lib';
 
     if(Deno.build.os == 'windows') {
-        prefix = '.dll';
+        suffix = '.dll';
+        prefix = '';
     }
 
-    return (path ?? '') + s + prefix;
+    return (path ?? '') + prefix + s + suffix;
 }
 
 export class FancyBuffer {
