@@ -63,8 +63,8 @@ ui.layout(
             w: size_grow(), h: size_grow(),
             color: color([255,255,255])
         }),
-        ui.rectangle('ProfilePictureOuter', {
-            w: size_static(20), h: size_grow(),
+        ui.rectangle('SideBar', {
+            w: size_static(30), h: size_grow(),
             color: color()
         })
     ])

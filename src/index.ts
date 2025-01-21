@@ -17,7 +17,8 @@ type Track = {
     file:       string
 };
 
-const TEMP_PATH = `/home/nostalgia3/Music/`;
+// const TEMP_PATH = `/home/nostalgia3/Music/`;
+const TEMP_PATH = `D:/Music/mp3`;
 
 class App extends utils.TypedEventEmitter<{
     click: [number, number, number, boolean],
@@ -214,10 +215,10 @@ class App extends utils.TypedEventEmitter<{
 
         this.rend.box(0, 0, this.ui.trackWidth, this.ui.trackHeight, 'Tracks', gfore);
 
-        this.rend.clearText(
-            1, 1,
-            this.ui.trackWidth-2, this.ui.trackHeight-2
-        );
+        // this.rend.clearText(
+        //     1, 1,
+        //     this.ui.trackWidth-2, this.ui.trackHeight-2
+        // );
 
         if(this.tracks.length == 0) {
             if(flush) this.rend.flush();
@@ -450,7 +451,8 @@ app.on('scroll', (count, x, y) => {
             app.scrollUp(5);
         }
 
-        app.drawTracks();
+        app.render();
+        // app.drawTracks();
     }
 });
 
