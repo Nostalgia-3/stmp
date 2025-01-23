@@ -192,6 +192,25 @@ export function frgb(rgb: RGB, foreground: boolean) {
         return `\x1b[48;2;${rgb[0]};${rgb[1]};${rgb[2]}m`;
 }
 
+export function parseHexColor(hex: string): { r: number, g: number, b: number } {
+    hex = hex.replace('#', '');
+  
+    if(hex.length !== 3 && hex.length !== 6) {
+        return {r:0, g:0, b:0};
+    }
+  
+    if(hex.length === 3) {
+        hex = hex.split('').map(char => char + char).join('');
+    }
+  
+    // Parse the hex values into decimal RGB values
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+  
+    return { r, g, b };
+}
+
 export function cursorTo(x: number, y: number) {
     return `\x1b[${y+1};${x+1}H`;
 }
@@ -236,6 +255,10 @@ export function setAltBuffer(alt: boolean) {
  */
 export function grad(c: RGB): Gradient {
     return [c, c];
+}
+
+export function rgb(c: { r:number,g:number,b:number }): Gradient {
+    return [[c.r,c.g,c.b],[c.r,c.g,c.b]];
 }
 
 /**

@@ -12,8 +12,8 @@ type Track = {
     file:       string
 };
 
-const TEMP_PATH = `/home/nostalgia3/Music/`;
-// const TEMP_PATH = `D:/Music/mp3`;
+// const TEMP_PATH = `/home/nostalgia3/Music/`;
+const TEMP_PATH = `D:/Music/mp3/`;
 
 class App extends utils.TypedEventEmitter<{
     click: [number, number, number, boolean],
@@ -37,7 +37,7 @@ class App extends utils.TypedEventEmitter<{
     protected player: Player;
 
     protected ui = {
-        titleMaxWidth:      30, // Maximum title width
+        titleMaxWidth:      50, // Maximum title width
 
         playingNowWidth:    30,
         bottomBarWidth:     -1,
@@ -45,7 +45,26 @@ class App extends utils.TypedEventEmitter<{
         trackWidth:         -1,
         trackHeight:        -1,
         playingNowHeight:   -1,
+
+        settingsWidth:      75,
+        settingsHeight:     20,
+
+        primary_fg:     utils.grad([255, 255, 255]),
+        secondary_fg:   utils.grad([192, 192, 192]),
+        bg:             [[97, 67, 133], [81, 99, 149]] // Kashmir
+        // [[238, 156, 167], [255, 221, 225]]    // Piglet
+        // [[255, 95, 109], [255, 195, 113]]     // Sweet Morning
     };
+
+    protected settings = [
+        {
+            id: 'test',
+            name: `Example Setting`,
+            type: 'boolean',
+            description: `This is an example setting.`,
+            value: false,
+        }
+    ];
 
     constructor() {
         super();
@@ -91,6 +110,7 @@ class App extends utils.TypedEventEmitter<{
 
             this.tracks.push({ file: entry.name, tag: tags });
         }
+
         // this.tracks.sort((a,b)=>(a.title??a.file).length-(b.title??b.file).length);
 
         utils.enableMouse();
@@ -160,7 +180,7 @@ class App extends utils.TypedEventEmitter<{
                         break;
                     
                     case 'space':
-                        this.togglePaused();
+                        this.toggle();
                     break;
     
                     default:
@@ -179,21 +199,14 @@ class App extends utils.TypedEventEmitter<{
         this.size = { w, h };
         this.rend.size(w, h);
 
-        // const gfore = utils.grad([255, 255, 255]);
-        // const afore = utils.grad([192, 192, 192]);
-        // const gfore = utils.grad([0, 0, 0]);
-        // const afore = utils.grad([128, 128, 128]);
-
         this.ui.bottomBarWidth  = w;
         this.ui.bottomBarHeight = 4;
         this.ui.trackWidth      = w-this.ui.playingNowWidth;
         this.ui.trackHeight     = h-this.ui.bottomBarHeight;
         this.ui.playingNowHeight= h-this.ui.bottomBarHeight;
         
-        this.rend.clear([[97, 67, 133], [81, 99, 149]]);        // Kashmir
-        // this.rend.clear([[238, 156, 167], [255, 221, 225]]);    // Piglet
-        // this.rend.clear([[255, 95, 109], [255, 195, 113]]);     // Sweet Morning
-        
+        this.rend.clear(this.ui.bg as utils.Gradient);
+
         if(w < this.ui.playingNowWidth) {
             // draw smaller UI
         } else {
@@ -201,18 +214,19 @@ class App extends utils.TypedEventEmitter<{
             this.drawScrubber(false);
             this.drawMediaControls(false);
             this.drawSideInfo(false);
+            this.drawSettings(false);
         }
 
         this.rend.flush();
     }
 
     drawTracks(flush = true) {
-        const gfore = utils.grad([255, 255, 255]);
-        const afore = utils.grad([192, 192, 192]);
+        const pfg = this.ui.primary_fg;
+        const sfg = this.ui.secondary_fg;
 
         if(flush) this.rend.clearText(0, 0, this.ui.trackWidth, this.ui.trackHeight);
 
-        this.rend.box(0, 0, this.ui.trackWidth, this.ui.trackHeight, 'Tracks', gfore);
+        this.rend.box(0, 0, this.ui.trackWidth, this.ui.trackHeight, 'Tracks', pfg);
 
         if(this.tracks.length == 0) {
             if(flush) this.rend.flush();
@@ -221,9 +235,16 @@ class App extends utils.TypedEventEmitter<{
 
         // This is "slow", but unless the track list is absolutely massive,
         // this should be fine
-        const longestTrackTitle = this.tracks
-            .map((v)=>(v.tag?.title ?? v.file).length)
-            .sort((a,b)=>b-a)[0]
+        let longestTrackTitle = 0;
+        for(let i=0;i<this.tracks.length;i++) {
+            if((this.tracks[i].tag?.title?.length ?? this.tracks[i].file.length) > longestTrackTitle) {
+                longestTrackTitle = (this.tracks[i].tag?.title?.length ?? this.tracks[i].file.length);
+            }
+            if(longestTrackTitle > this.ui.titleMaxWidth) {
+                longestTrackTitle = this.ui.titleMaxWidth;
+                break;
+            }
+        }
         ;
 
         for(let i=0;i<this.ui.trackHeight-2;i++) {
@@ -234,29 +255,29 @@ class App extends utils.TypedEventEmitter<{
             const track     = this.tracks[this.trackOff+i];
 
             const selected  = this.trackSel == (i+this.trackOff);
-            const fore      = selected ? utils.grad([0, 0, 0]) : gfore;
+            const fore      = selected ? utils.grad([0, 0, 0]) : pfg;
 
-            this.rend.text(1, i+1, (track?.tag?.title ?? track.file).slice(0, this.ui.trackWidth-2), fore, undefined, { underline: selected });
-            this.rend.text(1+longestTrackTitle+1, i+1, (track.tag?.artists?.join(', ') ?? '').slice(0,this.ui.trackWidth-2), fore, undefined, { underline: selected });
+            this.rend.text(1, i+1, (track?.tag?.title ?? path.basename(track.file, path.extname(track.file))).slice(0, this.ui.titleMaxWidth), fore, undefined, { underline: selected });
+            this.rend.text(1+longestTrackTitle+1, i+1, (track.tag?.artists?.join(', ') ?? '').slice(0,this.ui.trackWidth-3-this.ui.titleMaxWidth), fore, undefined, { underline: selected });
         }
 
         // Track scrubber
         if(this.tracks.length < this.ui.trackHeight-2) {
-            this.rend.vline(this.ui.trackWidth-2, 1, this.ui.trackHeight-2, gfore, undefined, '▐');
+            this.rend.vline(this.ui.trackWidth-2, 1, this.ui.trackHeight-2, pfg, undefined, '▐');
         } else {
             const percentScrolled = (this.trackOff)/(this.tracks.length);
             const size = Math.floor((this.ui.trackHeight-2)/this.tracks.length*(this.ui.trackHeight-2));
             const offset = Math.ceil((this.ui.trackHeight-2) * percentScrolled);
-            this.rend.vline(this.ui.trackWidth-2, 1, this.ui.trackHeight-2, afore, undefined, '▐');
-            this.rend.vline(this.ui.trackWidth-2, 1+offset, size, gfore, undefined, '▐');
+            this.rend.vline(this.ui.trackWidth-2, 1, this.ui.trackHeight-2, sfg, undefined, '▐');
+            this.rend.vline(this.ui.trackWidth-2, 1+offset, size, pfg, undefined, '▐');
         }
 
         if(flush) this.rend.flush();
     }
 
     drawScrubber(flush = true) {
-        const gfore = utils.grad([255, 255, 255]);
-        const afore = utils.grad([192, 192, 192]);
+        const pfg = this.ui.primary_fg;
+        const sfg = this.ui.secondary_fg;
         
         const position = parseFloat(this.player.getPosition().toFixed(0));
         const minutesPlayed = (position - (position % 60))/60;
@@ -275,25 +296,25 @@ class App extends utils.TypedEventEmitter<{
             Math.floor((this.ui.bottomBarWidth-Math.floor(this.ui.bottomBarWidth/2))/2)-played.length-1,
             this.ui.trackHeight+Math.floor(this.ui.bottomBarHeight/2),
             played,
-            gfore
+            pfg
         );
         this.rend.text(
             Math.floor((this.ui.bottomBarWidth-Math.floor(this.ui.bottomBarWidth/2))/2),
             this.ui.trackHeight+Math.floor(this.ui.bottomBarHeight/2),
             ''.padEnd(Math.floor(this.ui.bottomBarWidth/2), fillCharacter),
-            afore
+            sfg
         );
         this.rend.text(
             Math.floor((this.ui.bottomBarWidth-Math.floor(this.ui.bottomBarWidth/2))/2),
             this.ui.trackHeight+Math.floor(this.ui.bottomBarHeight/2),
             ''.padEnd(Math.floor(this.ui.bottomBarWidth/2 * this.player.getPosition()/(this.player.getTotalLength() ?? 1)), fillCharacter),
-            gfore
+            pfg
         );
         this.rend.text(
             Math.floor((this.ui.bottomBarWidth-Math.floor(this.ui.bottomBarWidth/2))/2)+Math.floor(this.ui.bottomBarWidth/2)+1,
             this.ui.trackHeight+Math.floor(this.ui.bottomBarHeight/2),
             `${totalMinutes}:${totalSeconds.toString().padStart(2,'0')}`,
-            gfore
+            pfg
         );
 
         if(flush) this.rend.flush();
@@ -318,25 +339,80 @@ class App extends utils.TypedEventEmitter<{
             '>>', utils.grad([0, 0, 0]), utils.grad([255, 255, 255])
         );
 
+        const {w, h} = this.size;
+        this.drawButton(w-this.ui.playingNowWidth+18, h-2, `Settings`, utils.grad([0, 0, 0]), utils.grad([255, 255, 255]));
+
         if(flush) this.rend.flush();
     }
 
     drawSideInfo(flush = true) {
-        const { w, h } = this.size;
-        const gfore = utils.grad([255, 255, 255]);
-        const afore = utils.grad([192, 192, 192]);
+        const { w } = this.size;
+        const pfg = this.ui.primary_fg;
+        const sfg = this.ui.secondary_fg;
 
         if(flush) this.rend.clearText(w-this.ui.playingNowWidth, 0, this.ui.playingNowWidth, this.ui.playingNowHeight);
 
         const imgHeight = Math.floor((this.ui.playingNowWidth-4)/2)-1;
-        this.rend.box(w-this.ui.playingNowWidth, 0, this.ui.playingNowWidth, this.ui.playingNowHeight, 'Active', gfore);
+        this.rend.box(w-this.ui.playingNowWidth, 0, this.ui.playingNowWidth, this.ui.playingNowHeight, 'Active', pfg);
         this.rend.rect(w-this.ui.playingNowWidth+2, 2, this.ui.playingNowWidth-4, imgHeight, utils.grad([0,0,0]));
-        this.rend.text(w-this.ui.playingNowWidth+2, imgHeight+3, `${this.activeTrack ? (this.activeTrack.tag?.title ?? 'Unknown') : 'Song title'}`, gfore);
-        this.rend.text(w-this.ui.playingNowWidth+2, imgHeight+4, `${this.activeTrack ? (this.activeTrack.tag?.artists?.join(', ') ?? 'Unknown') : 'Artist'}`, afore);
-
-        this.drawButton(w-this.ui.playingNowWidth+18, h-2, `Settings`, utils.grad([0, 0, 0]), utils.grad([255, 255, 255]));
+        this.rend.text(w-this.ui.playingNowWidth+2, imgHeight+3, `${this.activeTrack ? (this.activeTrack.tag?.title ?? this.activeTrack.file).slice(0, this.ui.playingNowWidth-4) : 'Song title'}`, pfg);
+        this.rend.text(w-this.ui.playingNowWidth+2, imgHeight+4, `${this.activeTrack ? (this.activeTrack.tag?.artists?.join(', ') ?? '') : 'Artist'}`, sfg);
 
         if(flush) this.rend.flush();
+    }
+
+    drawSettings(flush = true) {
+        const { w, h } = this.size;
+        const pfg = this.ui.primary_fg;
+        const sfg = this.ui.secondary_fg;
+
+        this.rend.clearText(
+            Math.floor((w-this.ui.settingsWidth)/2), Math.floor((h-this.ui.settingsHeight)/2),
+            this.ui.settingsWidth, this.ui.settingsHeight
+        );
+        this.rend.box(
+            Math.floor((w-this.ui.settingsWidth)/2), Math.floor((h-this.ui.settingsHeight)/2),
+            this.ui.settingsWidth, this.ui.settingsHeight,
+            `Settings`, pfg
+        );
+
+        for(let i=0;i<this.settings.length;i++) {
+            this.rend.text(
+                Math.floor((w-this.ui.settingsWidth)/2)+2,
+                Math.floor((h-this.ui.settingsHeight)/2)+1+i*2,
+                this.settings[i].name,
+                pfg
+            );
+            this.rend.text(
+                Math.floor((w-this.ui.settingsWidth)/2)+2,
+                Math.floor((h-this.ui.settingsHeight)/2)+2+i*2,
+                this.settings[i].description,
+                sfg
+            );
+            switch(this.settings[i].type) {
+                case 'boolean':
+                    this.drawSlider(
+                        Math.floor((w+this.ui.settingsWidth)/2)-6,
+                        Math.floor((h-this.ui.settingsHeight)/2)+1+i*2,
+                        this.settings[i].value,
+                        pfg
+                    );
+                break;
+            }
+        }
+        
+        if(flush) this.rend.flush();
+    }
+
+    drawSlider(x: number, y: number, active: boolean, bg?: utils.Gradient) {
+        this.rend.rect(x+1, y, 2, 1, active ? utils.grad([0,255,0]) : utils.grad([255,0,0]));
+        if(active) {
+            this.rend.text(x+1, y, ` \ue0b6\ue0b4`, bg);
+            this.rend.text(x, y, `\ue0b6`, utils.grad([0,255,0]));
+        } else {
+            this.rend.text(x, y, `\ue0b6\ue0b4`, bg);
+            this.rend.text(x+3, y, `\ue0b4`, utils.grad([255,0,0]));
+        }
     }
 
     drawButton(x: number, y: number, s: string, fg?: utils.Gradient, bg?: utils.Gradient) {
@@ -345,20 +421,26 @@ class App extends utils.TypedEventEmitter<{
         this.rend.text(x+1, y, s, fg);
     }
 
-    inTrackBounds(x: number, y: number) {
-        if(
-            x >= 1 && x < this.ui.trackWidth-1 &&
-            y > 1 && y < this.ui.trackHeight
-        ) return true;
-        return false;
+    handleClick(x: number, y: number) {
+        const pStart = Math.floor((this.ui.bottomBarWidth-Math.floor(this.ui.bottomBarWidth/2))/2)+Math.floor(this.ui.bottomBarWidth/4);
+
+        if( x >= 1 && x < this.ui.trackWidth-1 && y > 1 && y < this.ui.trackHeight) {
+            this.selectWithOffset(y-2);
+        } else if(x >= pStart && x <= pStart+4 && y == this.ui.trackHeight+2) {
+            this.toggle();
+        }
     }
 
-    inPlayBounds(x: number, y: number) {
-        const xStart = Math.floor((this.ui.bottomBarWidth-Math.floor(this.ui.bottomBarWidth/2))/2)+Math.floor(this.ui.bottomBarWidth/4);
-        if(x >= xStart && x <= xStart+4 && y == this.ui.trackHeight+2) {
-            return true;
+    handleScroll(x: number, y: number, count: number) {
+        if( x >= 1 && x < this.ui.trackWidth-1 && y > 1 && y < this.ui.trackHeight) {
+            if(count > 0) {
+                app.scrollDown(5);
+            } else {
+                app.scrollUp(5);
+            }
+
+            app.drawTracks();
         }
-        return false;
     }
 
     trackUp() {
@@ -425,7 +507,10 @@ class App extends utils.TypedEventEmitter<{
         } else utils.bell();
     }
 
-    togglePaused() {
+    /**
+     * Toggle whether the audio is playing or not
+     */
+    toggle() {
         if(this.player.isPaused())
             this.player.resume();
         else
@@ -436,32 +521,26 @@ class App extends utils.TypedEventEmitter<{
     }
 }
 
+import process from 'node:process';
+
+process.on('uncaughtException', (e) => {
+    utils.disableMouse();
+    utils.setAltBuffer(false);
+    utils.showCursor();
+    throw e;
+});
+
 const app = new App();
 
 app.on('click', (button, x, y, down) => {
     if(!down) return;
 
-    if(app.inTrackBounds(x, y)) {
-        if(button == 0) {
-            app.selectWithOffset(y-2);
-        }
-    }
-    if(app.inPlayBounds(x, y)) {
-        app.togglePaused();
-    }
+    if(button == 0)
+        app.handleClick(x, y);
 });
 
 app.on('scroll', (count, x, y) => {
-    if(app.inTrackBounds(x, y)) {
-        if(count > 0) {
-            app.scrollDown(5);
-        } else {
-            app.scrollUp(5);
-        }
-
-        // app.render();
-        app.drawTracks();
-    }
+    app.handleScroll(x, y, count);
 });
 
 app.start();
