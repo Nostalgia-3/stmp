@@ -10,7 +10,7 @@ export function size_static(c: number): Size {
 }
 
 export function size_percentage(c: number): Size {
-    return { type: 'static', val: c };
+    return { type: 'static', val: c/100 };
 }
 
 export function size_grow(): Size {
@@ -41,7 +41,7 @@ export type ItuiStyle = {
 
 export type ContentNode = {
     id?: string,
-    type: string,
+    type: 'rect' | 'text' | 'image',
     style: Partial<ItuiStyle>,
     children: ContentNode[],
     content?: unknown
@@ -57,31 +57,29 @@ export class Itui {
 
     }
 
+    protected parseSize(size: Size, v: number) {
+        switch(size.type) {
+            case "percentage": return { v: v*Math.min(size.val, 1), d: true };
+            case "grow": return { v, d: false };
+            case "static": return { v: size.val, d: true };
+        }
+    }
+
     /**
      * Parse a node tree, returning a list of
      * renderer commands.
-     * @param node The node tree to parse
+     * @param node The root node in a node tree to parse
      */
-    layout(node: ContentNode) {
-        const renderCommands: RenderCommand[] = [];
-
-        switch(node.type) {
-            case 'text':
-                renderCommands.push({
-                    type: 'text', x: 0, y: 0,
-                    color: node.style.fg ?? color({ r: 0, g: 0, b: 0 }),
-                    text: node.content as string
-                });
-            break;
-        }
-
-        return renderCommands;
+    layout(node: ContentNode, w: number, h: number, x: number, y: number) {
+        return [];
+        // let renderCommands: RenderCommand[] = [];
+        // return renderCommands;
     }
 
     rectangle(id: string, style: Partial<ItuiStyle>, children?: ContentNode[]) {
         return {
-            id, type: 'rectangle',
-            style, children
+            id, type: 'rect',
+            style, children: children ?? []
         } as ContentNode;
     }
 

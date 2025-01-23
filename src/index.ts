@@ -12,6 +12,13 @@ type Track = {
     file:       string
 };
 
+type Setting = {
+    id: string, name: string,
+    type: 'boolean',
+    description: string,
+    value: unknown
+};
+
 // const TEMP_PATH = `/home/nostalgia3/Music/`;
 const TEMP_PATH = `D:/Music/mp3/`;
 
@@ -49,21 +56,21 @@ class App extends utils.TypedEventEmitter<{
         settingsWidth:      75,
         settingsHeight:     20,
 
-        primary_fg:     utils.grad([255, 255, 255]),
-        secondary_fg:   utils.grad([192, 192, 192]),
-        bg:             [[97, 67, 133], [81, 99, 149]] // Kashmir
+        primary_fg:         utils.grad([255, 255, 255]),
+        secondary_fg:       utils.grad([192, 192, 192]),
+        bg:                 [[97, 67, 133], [81, 99, 149]] // Kashmir
         // [[238, 156, 167], [255, 221, 225]]    // Piglet
         // [[255, 95, 109], [255, 195, 113]]     // Sweet Morning
     };
 
-    protected settings = [
+    protected settings: Setting[] = [
         {
             id: 'test',
             name: `Example Setting`,
             type: 'boolean',
             description: `This is an example setting.`,
             value: false,
-        }
+        },
     ];
 
     constructor() {
@@ -214,7 +221,7 @@ class App extends utils.TypedEventEmitter<{
             this.drawScrubber(false);
             this.drawMediaControls(false);
             this.drawSideInfo(false);
-            this.drawSettings(false);
+            // this.drawSettings(false);
         }
 
         this.rend.flush();
@@ -394,7 +401,7 @@ class App extends utils.TypedEventEmitter<{
                     this.drawSlider(
                         Math.floor((w+this.ui.settingsWidth)/2)-6,
                         Math.floor((h-this.ui.settingsHeight)/2)+1+i*2,
-                        this.settings[i].value,
+                        this.settings[i].value as boolean,
                         pfg
                     );
                 break;
