@@ -20,19 +20,32 @@ export enum Genre {
 }
 
 export type Tag = {
-    title: string,
-    artist: string,
-    album: string,
-    year: string,
-    comment: string,
-    genre: Genre
+    title?: string,
+    artists?: string[],
+    album?: string,
+    year?: string,
+    comment?: string,
+    track?: number,
+    totalTracks?: number,
+    genre?: Genre
 };
+
+function readTextString(fb: FancyBuffer, size: number) {
+    const st = (fb.readU8() == 1) 
+        ? fb.readLenUTF16String(size-2)
+        : fb.readLenAsciiString(size-2);
+    fb.skip(1);
+    return st;
+}
 
 function getVersion3(fb: FancyBuffer) {
     fb.skip(10);
 
+    const t: Tag = {};
+
     while(1) {
         const tag   = fb.readLenAsciiString(4);
+        if(tag.length == 0) break;
         const size  = fb.readU32BE();
         const _flags = fb.readU16BE();
 
@@ -40,73 +53,91 @@ function getVersion3(fb: FancyBuffer) {
 
         switch(tag) {
             case 'TYER':
-                console.log(`Year\t\t${fb.readLenUTF8String(size)}`);
-            break;
-
-            case 'TENC':
-                console.log(`Encoded by\t${fb.readLenUTF8String(size)}`);
+                t.year = readTextString(fb, size);
             break;
 
             case 'TIT2':
-                console.log(`Name\t\t${fb.readLenUTF8String(size)}`);
+                t.title = readTextString(fb, size);
             break;
 
-            case 'TIT3':
-                console.log(`Subtitle\t${fb.readLenUTF8String(size)}`);
+            case `TPE1`:
+                t.artists = readTextString(fb, size).split('/');
+            break;
+
+            case 'TRCK': {
+                const tInfo = readTextString(fb, size).split('/').map((v)=>parseInt(v));
+                if(tInfo[0]) t.track = tInfo[0];
+                if(tInfo[1]) t.totalTracks = tInfo[1];
+            break; }
+
+            case 'TALB':
+                t.album = readTextString(fb, size);
             break;
 
             default:
-                console.log(tag);
                 fb.skip(size);
             break;
         }
     }
+
+    return t;
 }
 
 function getVersion4(fb: FancyBuffer) {
     fb.skip(10);
 
-    console.log(`\x1b[31mTitle\x1b[0m\t\t\x1b[31mValue\x1b[0m`);
+    const t: Tag = {};
     while(1) {
-        const tag   = fb.readLenAsciiString(4);
-        const size  = (fb.readU8() << 7*3) | (fb.readU8() << 7*2) | (fb.readU8() << 7) | fb.readU8();
+        const tag   = fb.readLenUTF8String(4);
+        if(tag.length == 0) break;
+        const size  = (fb.readU8() << 21) | (fb.readU8() << 14) | (fb.readU8() << 7) | fb.readU8();
         const _flags = fb.readU16BE();
-
-        if(size == 0) break;
 
         switch(tag) {
             case 'TYER':
-                console.log(`\x1b[36mYear\x1b[0m\t\t${fb.readLenUTF8String(size)}`);
-            break;
-
-            case 'TENC':
-                console.log(`\x1b[36mEncoded by\x1b[0m\t${fb.readLenUTF8String(size)}`);
+                t.year = readTextString(fb, size);
             break;
 
             case 'TIT2':
-                console.log(`\x1b[36mName\x1b[0m\t\t${fb.readLenUTF8String(size)}`);
+                t.title = readTextString(fb, size);
             break;
 
-            case 'TIT3':
-                console.log(`\x1b[33mSubtitle\x1b[0m\t${fb.readLenUTF8String(size)}`);
+            case `TPE1`:
+                t.artists = readTextString(fb, size).split('/');
+            break;
+
+            case 'TRCK': {
+                const tInfo = readTextString(fb, size).split('/').map((v)=>parseInt(v));
+                t.track = tInfo[0];
+                t.totalTracks = tInfo[1];
+            break; }
+
+            case 'TALB':
+                t.album = readTextString(fb, size);
+            break;
+
+            case 'TSSE':
+                // console.log(readTextString(fb, size));
+                fb.skip(size+10);
             break;
 
             default:
-                console.log(`\x1b[36m${tag}\x1b[0m\t\tsize=${size}`);
                 fb.skip(size);
             break;
         }
     }
+
+    return t;
 }
 
-function getLegacy(fb: FancyBuffer) {
+function getLegacy(fb: FancyBuffer): Tag | undefined {
     const b = fb.readLenAsciiString(3);
     if(b != 'TAG')
         return;
 
     return {
         title:  fb.readLenUTF8String(30).split('\0')[0],
-        artist: fb.readLenUTF8String(30).split('\0')[0],
+        artists: [fb.readLenUTF8String(30).split('\0')[0]],
         album:  fb.readLenUTF8String(30).split('\0')[0],
         year:   fb.readLenUTF8String(4),
         comment:fb.readLenUTF8String(30).split('\0')[0],
@@ -114,7 +145,7 @@ function getLegacy(fb: FancyBuffer) {
     };
 }
 
-export async function getFileID3(file: string) {
+export async function getFileID3(file: string): Promise<Tag | undefined> {
     // This lets me not load the entire file, which *should*
     // make it faster (I think, anyways)
     const f = await Deno.open(file, { read: true, write: false });
@@ -127,8 +158,8 @@ export async function getFileID3(file: string) {
 
     const tag       = fb.readLenAsciiString(3);
     const major     = fb.readU8();
-    const minor     = fb.readU8();
-    const flags     = fb.readU8();
+    const _minor    = fb.readU8();
+    const _flags    = fb.readU8();
     const size      = (fb.readU8() << 7*3) | (fb.readU8() << 7*2) | (fb.readU8() << 7) | fb.readU8();
 
     if(tag != 'ID3') {
@@ -146,11 +177,11 @@ export async function getFileID3(file: string) {
     f.readSync(frames);
     f.close();
 
-    fb = new FancyBuffer(frames);
-
     if(major == 3) {
+        fb = new FancyBuffer(frames);
         return getVersion3(fb);
     } else if(major == 4)  {
+        fb = new FancyBuffer(frames);
         return getVersion4(fb);
     }
 

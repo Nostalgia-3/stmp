@@ -45,8 +45,11 @@ export class Renderer {
         }
     }
 
-    clearText(x: number, y: number) {
-        
+    clearText(x: number, y: number, w: number, h: number) {
+        for(let i=0;i<h;i++) {
+            this.s += `${utils.cursorTo(x, i)}${utils.frgb(this.getBG(x, y+i), false)}${''.padStart(w, ' ')}`;
+        }
+        this.s += `\x1b[0m`;
     }
 
     clear(bg: utils.Gradient) {

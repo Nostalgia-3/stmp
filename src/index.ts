@@ -1,24 +1,19 @@
 import { Keypress, readKeypress } from "https://deno.land/x/keypress@0.0.11/mod.ts";
 
-import { extname } from "node:path";
+import * as path from "node:path";
 
 import { Player } from "./player.ts";
 import { Renderer } from "./renderer.ts";
 import * as utils from './utils.ts';
-import { Genre, getFileID3 } from "./id3.ts";
+import { getFileID3, Tag } from "./id3.ts";
 
 type Track = {
-    title?:     string,
-    artist?:    string,
-    album?:     string,
-    year?:      string,
-    comment?:   string,
-    genre?:     Genre,
+    tag?:       Tag,
     file:       string
 };
 
-// const TEMP_PATH = `/home/nostalgia3/Music/`;
-const TEMP_PATH = `D:/Music/mp3`;
+const TEMP_PATH = `/home/nostalgia3/Music/`;
+// const TEMP_PATH = `D:/Music/mp3`;
 
 class App extends utils.TypedEventEmitter<{
     click: [number, number, number, boolean],
@@ -91,10 +86,10 @@ class App extends utils.TypedEventEmitter<{
 
         for(const entry of f) {
             if(!entry.isFile) continue;
-            if(extname(entry.name) != '.mp3') continue;
+            if(path.extname(entry.name) != '.mp3') continue;
             const tags = await getFileID3(`${TEMP_PATH}/${entry.name}`);
 
-            this.tracks.push({ file: entry.name, ...tags });
+            this.tracks.push({ file: entry.name, tag: tags });
         }
         // this.tracks.sort((a,b)=>(a.title??a.file).length-(b.title??b.file).length);
 
@@ -149,14 +144,24 @@ class App extends utils.TypedEventEmitter<{
             } else {
                 switch(keypress.key) {
                     case 'up':
+                    case 'k':
                         this.trackUp();
-                        this.update();
+                        this.drawTracks();
                         break;
     
                     case 'down':
+                    case 'j':
                         this.trackDown();
-                        this.update();
+                        this.drawTracks();
                         break;
+
+                    case 'return':
+                        this.playAt();
+                        break;
+                    
+                    case 'space':
+                        this.togglePaused();
+                    break;
     
                     default:
                         utils.bell();
@@ -174,8 +179,8 @@ class App extends utils.TypedEventEmitter<{
         this.size = { w, h };
         this.rend.size(w, h);
 
-        const gfore = utils.grad([255, 255, 255]);
-        const afore = utils.grad([192, 192, 192]);
+        // const gfore = utils.grad([255, 255, 255]);
+        // const afore = utils.grad([192, 192, 192]);
         // const gfore = utils.grad([0, 0, 0]);
         // const afore = utils.grad([128, 128, 128]);
 
@@ -195,15 +200,7 @@ class App extends utils.TypedEventEmitter<{
             this.drawTracks(false);
             this.drawScrubber(false);
             this.drawMediaControls(false);
-
-            // render playing now menu
-            const imgHeight = Math.floor((this.ui.playingNowWidth-4)/2)-1;
-            this.rend.box(w -this.ui.playingNowWidth, 0, this.ui.playingNowWidth, this.ui.playingNowHeight, 'Active', gfore);
-            this.rend.rect(w-this.ui.playingNowWidth+2, 2, this.ui.playingNowWidth-4, imgHeight, utils.grad([0,0,0]));
-            this.rend.text(w-this.ui.playingNowWidth+2, imgHeight+3, `${this.activeTrack ? (this.activeTrack.title ?? 'Unknown') : 'Song title'}`, gfore);
-            this.rend.text(w-this.ui.playingNowWidth+2, imgHeight+4, `${this.activeTrack ? (this.activeTrack.artist ?? 'Unknown') : 'Artist'}`, afore);
-
-            this.drawButton(w-this.ui.playingNowWidth+18, h-2, `Settings`, utils.grad([0, 0, 0]), utils.grad([255, 255, 255]));
+            this.drawSideInfo(false);
         }
 
         this.rend.flush();
@@ -213,12 +210,9 @@ class App extends utils.TypedEventEmitter<{
         const gfore = utils.grad([255, 255, 255]);
         const afore = utils.grad([192, 192, 192]);
 
-        this.rend.box(0, 0, this.ui.trackWidth, this.ui.trackHeight, 'Tracks', gfore);
+        if(flush) this.rend.clearText(0, 0, this.ui.trackWidth, this.ui.trackHeight);
 
-        // this.rend.clearText(
-        //     1, 1,
-        //     this.ui.trackWidth-2, this.ui.trackHeight-2
-        // );
+        this.rend.box(0, 0, this.ui.trackWidth, this.ui.trackHeight, 'Tracks', gfore);
 
         if(this.tracks.length == 0) {
             if(flush) this.rend.flush();
@@ -228,7 +222,7 @@ class App extends utils.TypedEventEmitter<{
         // This is "slow", but unless the track list is absolutely massive,
         // this should be fine
         const longestTrackTitle = this.tracks
-            .map((v)=>(v.title??v.file).length)
+            .map((v)=>(v.tag?.title ?? v.file).length)
             .sort((a,b)=>b-a)[0]
         ;
 
@@ -241,12 +235,9 @@ class App extends utils.TypedEventEmitter<{
 
             const selected  = this.trackSel == (i+this.trackOff);
             const fore      = selected ? utils.grad([0, 0, 0]) : gfore;
-            const back      = selected ? utils.grad([220, 220, 220]) : undefined;
 
-            this.rend.rect(1, i+1, this.ui.trackWidth-3, 1, back);
-            this.rend.text(1, i+1, (track.title ?? track.file).slice(0, this.ui.trackWidth-2), fore);
-
-            this.rend.text(1+longestTrackTitle+1, i+1, (track.artist ?? '').slice(0,this.ui.trackWidth-2), fore);
+            this.rend.text(1, i+1, (track?.tag?.title ?? track.file).slice(0, this.ui.trackWidth-2), fore, undefined, { underline: selected });
+            this.rend.text(1+longestTrackTitle+1, i+1, (track.tag?.artists?.join(', ') ?? '').slice(0,this.ui.trackWidth-2), fore, undefined, { underline: selected });
         }
 
         // Track scrubber
@@ -330,6 +321,24 @@ class App extends utils.TypedEventEmitter<{
         if(flush) this.rend.flush();
     }
 
+    drawSideInfo(flush = true) {
+        const { w, h } = this.size;
+        const gfore = utils.grad([255, 255, 255]);
+        const afore = utils.grad([192, 192, 192]);
+
+        if(flush) this.rend.clearText(w-this.ui.playingNowWidth, 0, this.ui.playingNowWidth, this.ui.playingNowHeight);
+
+        const imgHeight = Math.floor((this.ui.playingNowWidth-4)/2)-1;
+        this.rend.box(w-this.ui.playingNowWidth, 0, this.ui.playingNowWidth, this.ui.playingNowHeight, 'Active', gfore);
+        this.rend.rect(w-this.ui.playingNowWidth+2, 2, this.ui.playingNowWidth-4, imgHeight, utils.grad([0,0,0]));
+        this.rend.text(w-this.ui.playingNowWidth+2, imgHeight+3, `${this.activeTrack ? (this.activeTrack.tag?.title ?? 'Unknown') : 'Song title'}`, gfore);
+        this.rend.text(w-this.ui.playingNowWidth+2, imgHeight+4, `${this.activeTrack ? (this.activeTrack.tag?.artists?.join(', ') ?? 'Unknown') : 'Artist'}`, afore);
+
+        this.drawButton(w-this.ui.playingNowWidth+18, h-2, `Settings`, utils.grad([0, 0, 0]), utils.grad([255, 255, 255]));
+
+        if(flush) this.rend.flush();
+    }
+
     drawButton(x: number, y: number, s: string, fg?: utils.Gradient, bg?: utils.Gradient) {
         this.rend.rect(x+1, y, s.length, 1, bg);
         this.rend.text(x, y, `\ue0b6${''.padStart(s.length)}\ue0b4`, bg);
@@ -387,9 +396,6 @@ class App extends utils.TypedEventEmitter<{
         }
     }
 
-    /**
-     * Scroll the track list down, without incrementing trackSel
-     */
     scrollDown(c = 1) {
         for(let i=0;i<c;i++) {
             if(this.trackOff > this.tracks.length-this.ui.trackHeight+1) {
@@ -402,8 +408,10 @@ class App extends utils.TypedEventEmitter<{
     }
 
     playAt() {
-        this.player.loadFile(TEMP_PATH + this.tracks[this.trackSel].file);
+        this.player.loadFile(path.join(TEMP_PATH, this.tracks[this.trackSel].file));
         this.player.play(0);
+        this.activeTrack = this.tracks[this.trackSel];
+        this.drawSideInfo(true);
     }
 
     selectWithOffset(x: number) {
@@ -451,8 +459,8 @@ app.on('scroll', (count, x, y) => {
             app.scrollUp(5);
         }
 
-        app.render();
-        // app.drawTracks();
+        // app.render();
+        app.drawTracks();
     }
 });
 

@@ -1,4 +1,4 @@
-import { getLibrary, TypedEventEmitter } from "./utils.ts";
+import { bell, getLibrary, TypedEventEmitter } from "./utils.ts";
 
 let sdl2: Deno.StaticForeignLibraryInterface<{
     readonly SDL_Init: {
@@ -88,7 +88,7 @@ export class Player extends TypedEventEmitter<{
         }
 
         // 22050Hz, signed 16 bit audio, two channels, 640 sample frames
-        mixer.Mix_OpenAudio(48000, 0x8010, 2, 640);
+        mixer.Mix_OpenAudio(44100, 0x8010, 2, 640);
     }
 
     loadFile(file: string) {
@@ -97,7 +97,11 @@ export class Player extends TypedEventEmitter<{
         }
 
         this.music = mixer.Mix_LoadMUS(asCString(file));
-        this.loaded = true;
+        if(this.music != null) {
+            this.loaded = true;
+        } else {
+            bell();
+        }
     }
 
     /**
@@ -129,8 +133,11 @@ export class Player extends TypedEventEmitter<{
     play(loops = 0) {
         if(!this.loaded) return;
 
-        mixer.Mix_PlayMusic(this.music, loops);
-        this.paused = false;
+        if(mixer.Mix_PlayMusic(this.music, loops) < 0) {
+
+        } else {
+            this.paused = false;
+        }
     }
 
     isPaused() {

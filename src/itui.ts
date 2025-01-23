@@ -31,21 +31,47 @@ export type ItuiStyle = {
     padding: Padding
 };
 
+export type ContentNode = {
+    id: string,
+    type: string,
+    style: Partial<ItuiStyle>,
+    children: ContentNode[],
+    content: unknown
+};
+
+export type RenderCommand =
+    { type: 'rect', x: number, y: number, w: number, h: number, color: Gradient } |
+    { type: 'text', x: number, y: number, text: string, color: Gradient } |
+    { type: 'image', x: number, y: number, w: number, h: number, pixels: number[] };
+
 export class Itui {
     constructor() {
 
     }
 
-    begin() {
+    /**
+     * Parse a node tree, returning a list of
+     * renderer commands
+     * @param node The node tree to parse
+     */
+    layout(node: ContentNode) {
+        const renderCommands: RenderCommand[] = [];
 
+        switch(node.type) {
+            case 'text':
+                renderCommands.push({
+                    type: 'text', x: 0, y: 0,
+                    color: node.style.fg ?? color({ r: 0, g: 0, b: 0 }),
+                    text: node.content as string
+                });
+            break;
+        }
+
+        return renderCommands;
     }
 
-    rectangle(style: Partial<ItuiStyle>) {
+    rectangle(id: string, style: Partial<ItuiStyle>, children?: ContentNode[]) {
         
-    }
-
-    end() {
-
     }
 }
 
@@ -65,8 +91,21 @@ ui.layout(
         }),
         ui.rectangle('SideBar', {
             w: size_static(30), h: size_grow(),
-            color: color()
-        })
+            color: color(`#505050`), padding: padding_all(1)
+        }, [
+            ui.image('AlbumArt', {
+                padding: padding_down(1)
+                // TODO: figure out how this would actually work
+            }),
+            ui.text('TrackTitle', {
+                color: color(`white`),
+                content: `Song Title`
+            }),
+            ui.text('TrackArtists', {
+                color: color(`gray`),
+                content: `Song Artists`
+            })
+        ])
     ])
 );
 

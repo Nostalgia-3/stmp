@@ -63,6 +63,11 @@ export class FancyBuffer {
         this.index+=count;
         return this.buf.subarray(this.index-count, this.index).toString('utf8');
     }
+
+    readLenUTF16String(count: number) {
+        this.index+=count;
+        return this.buf.subarray(this.index-count, this.index).toString('utf16le');
+    }
 }
 
 export type RGB = [number, number, number];
@@ -132,7 +137,7 @@ export function enableStyles(styles: Partial<TextStyles>) {
     if(styles.strikethrough) st += `9;`;
 
     if(st == `\x1b[`) return ``;
-    if(st.endsWith(';')) return st.substring(0, -1) + 'm';
+    if(st.endsWith(';')) return st.substring(0, st.length-1) + 'm';
     return ``;
 }
 
@@ -149,7 +154,7 @@ export function disableStyles(styles: Partial<TextStyles>) {
     if(styles.strikethrough) st += `29;`;
 
     if(st == `\x1b[`) return ``;
-    if(st.endsWith(';')) return st.substring(0, -1) + 'm';
+    if(st.endsWith(';')) return st.substring(0, st.length-1) + 'm';
     return ``;
 }
 
