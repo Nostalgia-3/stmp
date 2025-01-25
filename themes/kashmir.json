@@ -1,0 +1,30 @@
+{
+    "id": "kashmir",
+    "author": "Nostalgia3",
+    "description": "A nice red and blue theme",
+    "theme": {
+        "box": "╭─╮│╰─╯",
+        "fg": "#FFFFFF",
+        "bg": ["#614385", "#516395"],
+        "sidebar": {
+            "artist_fg": "$sfg"
+        },
+        "playbar": {
+            "normal": "━",
+            "filled": "━",
+            "thumb": "*",
+            "color": "#C0C0C0",
+            "fill_color": "#FFFFFF"
+        },
+        "selected_track": {
+            "fg": "#000000",
+            "bg": "#FFFFFF"
+        },
+        "playing_track": {
+            "fg": "#C0C0FF"
+        }
+    },
+    "variables": {
+        "sfg": ""
+    }
+}

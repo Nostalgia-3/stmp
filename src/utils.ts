@@ -1,5 +1,6 @@
 import { Buffer } from 'node:buffer';
 import { writeAllSync } from 'https://deno.land/std@0.216.0/io/write_all.ts';
+import path from 'node:path';
 
 export function getLibrary(s: string, path?: string) {
     let suffix = '.so';
@@ -158,6 +159,10 @@ export function disableStyles(styles: Partial<TextStyles>) {
     return ``;
 }
 
+export function filename(s: string) {
+    return path.basename(s, path.extname(s));
+}
+
 /**
  * Interpolates a color based on two other colors  
  * @param c1 The first color of the gradient
@@ -192,11 +197,11 @@ export function frgb(rgb: RGB, foreground: boolean) {
         return `\x1b[48;2;${rgb[0]};${rgb[1]};${rgb[2]}m`;
 }
 
-export function parseHexColor(hex: string): { r: number, g: number, b: number } {
+export function parseHexColor(hex: string): RGB {
     hex = hex.replace('#', '');
   
     if(hex.length !== 3 && hex.length !== 6) {
-        return {r:0, g:0, b:0};
+        return [0,0,0];
     }
   
     if(hex.length === 3) {
@@ -208,11 +213,15 @@ export function parseHexColor(hex: string): { r: number, g: number, b: number } 
     const g = parseInt(hex.slice(2, 4), 16);
     const b = parseInt(hex.slice(4, 6), 16);
   
-    return { r, g, b };
+    return [r, g, b];
 }
 
 export function cursorTo(x: number, y: number) {
     return `\x1b[${y+1};${x+1}H`;
+}
+
+export function cursorDown(i: number = 1) {
+    return `\x1b[${i}B`;
 }
 
 export function bell() {
@@ -220,7 +229,12 @@ export function bell() {
 }
 
 export function enableMouse() {
-    write(`\x1b[?1000;1003;1006;1015h`);
+    // mouse reporting = 1000
+    // mouse tracking = 1003
+    // mouse ?? = 1006
+    // mouse ??? = 1015
+    // 1003
+    write(`\x1b[?1000;1006;1015h`);
 }
 
 export function disableMouse() {

@@ -1,0 +1,29 @@
+node(grow, grow):
+    node(grow, grow)
+    node(static(6), grow)
+
++-------------+----+
+| grow        | 5  |
+|             |    |
++-------------+----+
+
+node(grow, grow):
+    node(grow, grow)
+    node(static(6), grow)
+    node(grow, grow)
+
++-----+------+-----+
+*******++++++*******
+*******++++++*******
++-----+------+-----+
+
+for cnode in nodes:
+    if(cnode.size.is_static):
+        free_space -= cnode.size.value;
+    else:
+        greedy_nodes++;
+
+for cnode in nodes:
+    if(!cnode.size.is_static):
+        cnode.size.val = free_space/greedy_nodes
+    else:

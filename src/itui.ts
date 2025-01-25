@@ -1,9 +1,14 @@
 import { parseHexColor } from "./utils.ts";
 
-export type Color       = { r: number, g: number, b: number };
+export type Color       = [number, number, number];
 export type Size        = { type: 'percentage' | 'grow' | 'static', val: number };
 export type Gradient    = { direction: 'h'|'v', cols: Color[] };
 export type Padding     = { top: number, bottom: number, left: number, right: number };
+
+export enum Direction {
+    Horizontal,
+    Vertical
+}
 
 export function size_static(c: number): Size {
     return { type: 'static', val: c };
@@ -25,9 +30,8 @@ export function padding_down(n: number): Padding {
     return { top: 0, bottom: n, left: 0, right: 0 };
 }
 
-export function color(c: string | Color | [number, number, number]): Gradient {
+export function color(c: string | [number, number, number]): Gradient {
     if(typeof(c) == 'string') return { direction: 'h', cols: [parseHexColor(c)] };
-    if(Array.isArray(c)) return { direction: 'h', cols: [{ r: c[0], g: c[1], b: c[2] }] };
     return { direction: 'h', cols: [c] };
 }
 
@@ -36,7 +40,8 @@ export type ItuiStyle = {
     h: Size,
     fg: Gradient,
     bg: Gradient,
-    padding: Padding
+    padding: Padding,
+    child_dir: Direction;
 };
 
 export type ContentNode = {
@@ -71,9 +76,39 @@ export class Itui {
      * @param node The root node in a node tree to parse
      */
     layout(node: ContentNode, w: number, h: number, x: number, y: number) {
-        return [];
-        // let renderCommands: RenderCommand[] = [];
-        // return renderCommands;
+        let renderCommands: RenderCommand[] = [];
+        if(!node.style.w) node.style.w = size_grow();
+        if(!node.style.h) node.style.h = size_grow();
+
+        const dir = node.style.child_dir ?? Direction.Horizontal;
+        const cW = this.parseSize(node.style.w, w);
+        const cH = this.parseSize(node.style.h, h);
+        let cX = x;
+        let cY = y;
+
+        switch(node.type) {
+            case 'rect':
+                renderCommands.push({ type: 'rect', x: cX, y: cY, w: cW.v, h: cH.v, color: node.style.bg ?? color('#FFF') });
+            break;
+
+            case 'text':
+                renderCommands.push({ type: 'text', x: cX, y: cY, text: node.content as string, color: node.style.fg ?? color('#FFF') });
+            break;
+        }
+
+        cX += (cW.d ? cW.v : 0);
+        cY += (cH.d ? cH.v : 0);
+
+        for(let i=0;i<node.children.length;i++) {
+            const r = this.layout(node.children[i], cW.v, h, cX, cY);
+            if(r.sU[0].d) cW.v -= r.sU[0].v;
+            if(r.sU[1].d) cH.v -= r.sU[1].v;
+            if(dir == Direction.Horizontal) cX += r.sU[0].v;
+            else cY += r.sU[1].v;
+            renderCommands = renderCommands.concat(r.c);
+        }
+
+        return { c: renderCommands, sU: [cW, cH] };
     }
 
     rectangle(id: string, style: Partial<ItuiStyle>, children?: ContentNode[]) {

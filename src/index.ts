@@ -19,8 +19,8 @@ type Setting = {
     value: unknown
 };
 
-// const TEMP_PATH = `/home/nostalgia3/Music/`;
-const TEMP_PATH = `D:/Music/mp3/`;
+const TEMP_PATH = `/home/nostalgia3/Music/`;
+// const TEMP_PATH = `D:/Music/mp3/`;
 
 class App extends utils.TypedEventEmitter<{
     click: [number, number, number, boolean],
@@ -43,6 +43,33 @@ class App extends utils.TypedEventEmitter<{
 
     protected player: Player;
 
+    protected theme = {
+        // const fillCharacter = '━';
+        // const fillCharacter = '█';
+        playbar_char:       '━',
+        playbar_fillchar:   '━',
+        playbar_color:      utils.grad([192,192,192]),
+        playbar_fillcolor:  utils.grad([255,255,255]),
+        playbar_thumbchar:  '*',
+
+        playing_song_fg:    utils.grad([192, 192, 255]),
+        selected_song_fg:   utils.grad([0, 0, 0]),
+        selected_song_bg:   utils.grad([255,255,255]),
+
+        // primary_fg:         utils.grad([255, 255, 255]),
+        // secondary_fg:       utils.grad([192, 192, 192]),
+        primary_fg: utils.grad(utils.parseHexColor(`#DFDFDF`)),
+        secondary_fg: utils.grad(utils.parseHexColor(`#1ED760`)),
+        bg: [
+            utils.parseHexColor(`#232526`),
+            utils.parseHexColor(`#414345`),
+        ]
+        // bg:                 [[97, 67, 133], [81, 99, 149]] // Kashmir
+        // bg:                 [utils.parseHexColor(`#283048`), utils.parseHexColor(`#859398`)]
+        // [[238, 156, 167], [255, 221, 225]]    // Piglet
+        // [[255, 95, 109], [255, 195, 113]]     // Sweet Morning
+    };
+
     protected ui = {
         titleMaxWidth:      50, // Maximum title width
 
@@ -56,11 +83,7 @@ class App extends utils.TypedEventEmitter<{
         settingsWidth:      75,
         settingsHeight:     20,
 
-        primary_fg:         utils.grad([255, 255, 255]),
-        secondary_fg:       utils.grad([192, 192, 192]),
-        bg:                 [[97, 67, 133], [81, 99, 149]] // Kashmir
-        // [[238, 156, 167], [255, 221, 225]]    // Piglet
-        // [[255, 95, 109], [255, 195, 113]]     // Sweet Morning
+        ...this.theme
     };
 
     protected settings: Setting[] = [
@@ -204,7 +227,7 @@ class App extends utils.TypedEventEmitter<{
     render() {
         const { columns: w, rows: h } = Deno.consoleSize();
         this.size = { w, h };
-        this.rend.size(w, h);
+        this.rend.resize(w, h);
 
         this.ui.bottomBarWidth  = w;
         this.ui.bottomBarHeight = 4;
@@ -224,24 +247,33 @@ class App extends utils.TypedEventEmitter<{
             // this.drawSettings(false);
         }
 
-        this.rend.flush();
+        this.rend.draw();
     }
 
     drawTracks(flush = true) {
         const pfg = this.ui.primary_fg;
         const sfg = this.ui.secondary_fg;
 
-        if(flush) this.rend.clearText(0, 0, this.ui.trackWidth, this.ui.trackHeight);
+        if(flush) {
+            this.rend.rect(
+                0, 0, this.ui.trackWidth, this.ui.trackHeight,
+                [this.ui.bg[0] as utils.RGB, utils.interpolate(
+                    this.ui.bg[0] as utils.RGB,
+                    this.ui.bg[1] as utils.RGB,
+                    (this.ui.trackHeight)/this.size.h
+                )]
+            );
+        }
 
         this.rend.box(0, 0, this.ui.trackWidth, this.ui.trackHeight, 'Tracks', pfg);
 
         if(this.tracks.length == 0) {
-            if(flush) this.rend.flush();
+            if(flush) this.rend.draw();
             return;
 	    }
 
         // This is "slow", but unless the track list is absolutely massive,
-        // this should be fine
+        // it should be fine
         let longestTrackTitle = 0;
         for(let i=0;i<this.tracks.length;i++) {
             if((this.tracks[i].tag?.title?.length ?? this.tracks[i].file.length) > longestTrackTitle) {
@@ -252,7 +284,6 @@ class App extends utils.TypedEventEmitter<{
                 break;
             }
         }
-        ;
 
         for(let i=0;i<this.ui.trackHeight-2;i++) {
             if(this.tracks[this.trackOff+i] == undefined) {
@@ -262,10 +293,19 @@ class App extends utils.TypedEventEmitter<{
             const track     = this.tracks[this.trackOff+i];
 
             const selected  = this.trackSel == (i+this.trackOff);
-            const fore      = selected ? utils.grad([0, 0, 0]) : pfg;
+            const fore      = (track.file == this.activeTrack?.file)
+                ? this.ui.playing_song_fg
+                : (selected ? this.ui.selected_song_fg : pfg);
 
-            this.rend.text(1, i+1, (track?.tag?.title ?? path.basename(track.file, path.extname(track.file))).slice(0, this.ui.titleMaxWidth), fore, undefined, { underline: selected });
-            this.rend.text(1+longestTrackTitle+1, i+1, (track.tag?.artists?.join(', ') ?? '').slice(0,this.ui.trackWidth-3-this.ui.titleMaxWidth), fore, undefined, { underline: selected });
+            if(selected) this.rend.rect(1, i+1, this.ui.trackWidth-3, 1, this.ui.selected_song_bg);
+            this.rend.text(
+                1, i+1,
+                ((track?.tag?.title ?? utils.filename(track.file))
+                    .slice(0, this.ui.titleMaxWidth)
+                    .padEnd(longestTrackTitle+1) +
+                (track.tag?.artists?.join(', ') ?? '')).slice(0, this.ui.trackWidth-2),
+                fore, undefined
+            );
         }
 
         // Track scrubber
@@ -279,12 +319,11 @@ class App extends utils.TypedEventEmitter<{
             this.rend.vline(this.ui.trackWidth-2, 1+offset, size, pfg, undefined, '▐');
         }
 
-        if(flush) this.rend.flush();
+        if(flush) this.rend.draw();
     }
 
     drawScrubber(flush = true) {
         const pfg = this.ui.primary_fg;
-        const sfg = this.ui.secondary_fg;
         
         const position = parseFloat(this.player.getPosition().toFixed(0));
         const minutesPlayed = (position - (position % 60))/60;
@@ -296,9 +335,6 @@ class App extends utils.TypedEventEmitter<{
 
         const played = `${minutesPlayed}:${secondsPlayed.toString().padStart(2,'0')}`;
 
-        const fillCharacter = '━';
-        // const fillCharacter = '█';
-
         this.rend.text(
             Math.floor((this.ui.bottomBarWidth-Math.floor(this.ui.bottomBarWidth/2))/2)-played.length-1,
             this.ui.trackHeight+Math.floor(this.ui.bottomBarHeight/2),
@@ -308,14 +344,14 @@ class App extends utils.TypedEventEmitter<{
         this.rend.text(
             Math.floor((this.ui.bottomBarWidth-Math.floor(this.ui.bottomBarWidth/2))/2),
             this.ui.trackHeight+Math.floor(this.ui.bottomBarHeight/2),
-            ''.padEnd(Math.floor(this.ui.bottomBarWidth/2), fillCharacter),
-            sfg
+            ''.padEnd(Math.floor(this.ui.bottomBarWidth/2), this.ui.playbar_char),
+            this.ui.playbar_color
         );
         this.rend.text(
             Math.floor((this.ui.bottomBarWidth-Math.floor(this.ui.bottomBarWidth/2))/2),
             this.ui.trackHeight+Math.floor(this.ui.bottomBarHeight/2),
-            ''.padEnd(Math.floor(this.ui.bottomBarWidth/2 * this.player.getPosition()/(this.player.getTotalLength() ?? 1)), fillCharacter),
-            pfg
+            ''.padEnd(Math.floor(this.ui.bottomBarWidth/2 * this.player.getPosition()/(this.player.getTotalLength() ?? 1)), this.ui.playbar_fillchar),
+            this.ui.playbar_fillcolor
         );
         this.rend.text(
             Math.floor((this.ui.bottomBarWidth-Math.floor(this.ui.bottomBarWidth/2))/2)+Math.floor(this.ui.bottomBarWidth/2)+1,
@@ -324,7 +360,7 @@ class App extends utils.TypedEventEmitter<{
             pfg
         );
 
-        if(flush) this.rend.flush();
+        if(flush) this.rend.draw();
     }
 
     drawMediaControls(flush = true) {
@@ -349,7 +385,7 @@ class App extends utils.TypedEventEmitter<{
         const {w, h} = this.size;
         this.drawButton(w-this.ui.playingNowWidth+18, h-2, `Settings`, utils.grad([0, 0, 0]), utils.grad([255, 255, 255]));
 
-        if(flush) this.rend.flush();
+        if(flush) this.rend.draw();
     }
 
     drawSideInfo(flush = true) {
@@ -365,7 +401,7 @@ class App extends utils.TypedEventEmitter<{
         this.rend.text(w-this.ui.playingNowWidth+2, imgHeight+3, `${this.activeTrack ? (this.activeTrack.tag?.title ?? this.activeTrack.file).slice(0, this.ui.playingNowWidth-4) : 'Song title'}`, pfg);
         this.rend.text(w-this.ui.playingNowWidth+2, imgHeight+4, `${this.activeTrack ? (this.activeTrack.tag?.artists?.join(', ') ?? '') : 'Artist'}`, sfg);
 
-        if(flush) this.rend.flush();
+        if(flush) this.rend.draw();
     }
 
     drawSettings(flush = true) {
@@ -408,7 +444,7 @@ class App extends utils.TypedEventEmitter<{
             }
         }
         
-        if(flush) this.rend.flush();
+        if(flush) this.rend.draw();
     }
 
     drawSlider(x: number, y: number, active: boolean, bg?: utils.Gradient) {
@@ -524,17 +560,16 @@ class App extends utils.TypedEventEmitter<{
             this.player.pause();
 
         this.drawMediaControls();
-        this.rend.flush();
+        this.rend.draw();
     }
 }
 
 import process from 'node:process';
 
-process.on('uncaughtException', (e) => {
+process.on('beforeExit', () => {
     utils.disableMouse();
     utils.setAltBuffer(false);
     utils.showCursor();
-    throw e;
 });
 
 const app = new App();
