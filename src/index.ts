@@ -19,8 +19,8 @@ type Setting = {
     value: unknown
 };
 
-const TEMP_PATH = `/home/nostalgia3/Music/`;
-// const TEMP_PATH = `D:/Music/mp3/`;
+// const TEMP_PATH = `/home/nostalgia3/Music/`;
+const TEMP_PATH = `D:/Music/mp3/`;
 
 class App extends utils.TypedEventEmitter<{
     click: [number, number, number, boolean],

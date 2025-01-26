@@ -26,7 +26,7 @@ export class Renderer {
             this.c[x+Math.min(y, this.height-1)*this.width][1] = c;
         } catch(e) {
             const { columns, rows } = Deno.consoleSize();
-            console.error(`setBG(${x}, ${y}) FAILED ; ${x+y*this.width} (${columns}, ${rows})`);
+            console.error(`setBG(${x}, ${y}) FAILED @ point ${x+y*this.width} [${this.c[x+y*this.width]}] (col=${columns-1}, rows=${rows})`);
             throw e;
         }
     }
