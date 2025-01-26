@@ -49,12 +49,13 @@ export type ItuiStyle = {
     padding: Padding,
     child_dir: Direction,
     centered: Direction,
-    title: string
+    title: string,
+    thin: boolean
 };
 
 export type ContentNode = {
     id?: string,
-    type: 'rect' | 'text' | 'image',
+    type: 'rect' | 'text' | 'image' | 'hslider' | 'vslider',
     style: Partial<ItuiStyle>,
     children: ContentNode[],
     content?: unknown
@@ -64,7 +65,7 @@ export type RenderCommand =
     { _id: string, type: 'rect', x: number, y: number, w: number, h: number, title?: string, bg?: Gradient } |
     { _id: string, type: 'text', x: number, y: number, text: string, fg?: Gradient, bg?: Gradient } |
     { _id: string, type: 'image', x: number, y: number, w: number, h: number, pixels: number[] } |
-    { _id: string, type: 'test', x: number, y: number, w: number, h: number };
+    { _id: string, type: 'hline', x: number, y: number, w: number, h: number, fg?: Gradient, bg?: Gradient };
 
 export class Itui {
     constructor() {
@@ -109,12 +110,29 @@ export class Itui {
 
         switch(node.type) {
             case 'rect':
-                renderCommands.push({ _id: node.id ?? '?', type: 'rect', x: cX, y: cY, w: cW.v, h: cH.v, title: node.style.title, bg: node.style.bg }); // color([randomInt(0, 255),randomInt(0, 255),randomInt(0, 255)]);
+                renderCommands.push({ _id: node.id ?? '?', type: 'rect', x: cX, y: cY, w: cW.v, h: cH.v, title: node.style.title, bg: node.style.bg });
             break;
 
             case 'text':
                 renderCommands.push({ _id: node.id ?? '?', type: 'text', x: cX, y: cY, text: (node.content as string).slice(0, w), fg: node.style.fg });
             break;
+
+            case 'hslider': {
+                renderCommands.push({ _id: node.id ?? '?', type: 'rect', x: cX, y: cY, w: cW.v, h: cH.v, bg: node.style.bg });
+                renderCommands.push({ _id: node.id ?? '?', type: 'rect', x: cX, y: cY, w: cW.v, h: cH.v, bg: node.style.fg });
+                // this.rend.text(
+                //     Math.floor((this.ui.bottomBarWidth-Math.floor(this.ui.bottomBarWidth/2))/2),
+                //     this.ui.trackHeight+Math.floor(this.ui.bottomBarHeight/2),
+                //     ''.padEnd(Math.floor(this.ui.bottomBarWidth/2 * this.player.getPosition()/(this.player.getTotalLength() ?? 1)), this.ui.playbar_fillchar),
+                //     this.ui.playbar_fillcolor
+                // );
+
+                // const percentScrolled = (this.trackOff)/(this.tracks.length);
+                // const size = Math.floor((this.ui.trackHeight-2)/this.tracks.length*(this.ui.trackHeight-2));
+                // const offset = Math.ceil((this.ui.trackHeight-2) * percentScrolled);
+                // this.rend.vline(this.ui.trackWidth-2, 1, this.ui.trackHeight-2, sfg, undefined, '▐');
+                // this.rend.vline(this.ui.trackWidth-2, 1+offset, size, pfg, undefined, '▐');
+            break; }
         }
 
         cX += (node.style.padding?.left ?? 0);
@@ -182,13 +200,40 @@ export class Itui {
         return renderCommands;
     }
 
-    rectangle(style: Partial<ItuiStyle>, children?: ContentNode[], id?: string) {
+    /**
+     * A horizontal slider
+     * @param style The style of this element
+     * @param fill The amount (in a decimal percentage) scrolled
+     * @param count The amount of elements for the slider
+     * @param id The id of this element
+     */
+    hslider(style: Partial<ItuiStyle>, fill: number, count?: number, id?: string) {
+        return {
+            id, type: 'hslider',
+            style, children: [],
+            content: [fill, count]
+        } as ContentNode;
+    }
+
+    /**
+     * A generic panel that can contain children.
+     * @param style The style of the panel
+     * @param children The children of the panel
+     * @param id The id of the panel
+     */
+    panel(style: Partial<ItuiStyle>, children?: ContentNode[], id?: string) {
         return {
             id, type: 'rect',
             style, children: children ?? []
         } as ContentNode;
     }
 
+    /**
+     * A text element
+     * @param style The style of the string
+     * @param content The contents of the string
+     * @param id The id of the text
+     */
     text(style: Partial<ItuiStyle>, content: string, id?: string) {
         return {
             id, type: 'text',

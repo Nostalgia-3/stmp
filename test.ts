@@ -9,7 +9,9 @@ const { columns: w, rows: h } = Deno.consoleSize();
 const ui = new Itui();
 
 const track: Partial<ItuiStyle> = {
-    fg: color('#FFF')
+    fg: color('#FFF'),
+    padding: padding(0, 0, 0, 1, false),
+    w: size_static(30)
 }
 
 const selectedTrack: Partial<ItuiStyle> = {
@@ -22,44 +24,44 @@ type Track = {
 };
 
 const tracks: Track[] = [
-    { file: 'Track #1' },
-    { file: 'Track #2' },
-    { file: 'A third track!' }
+    { tag: { artists: ['abc'] }, file: 'Track #1' },
+    { tag: { artists: ['abc'] }, file: 'Track #2' },
+    { tag: { artists: ['abc'] }, file: 'A third track!' }
 ];
 
 const commands = ui.layout(
-    ui.rectangle({
+    ui.panel({
         child_dir: Direction.Vertical,
         // bg: color("#7851A9", "#857d9c")
         bg: color([97, 67, 133], [81, 99, 149]) // '#232526', '#414345'
     }, [
-        ui.rectangle({}, [
-            ui.rectangle({
+        ui.panel({}, [
+            ui.panel({
                 child_dir: Direction.Horizontal,
                 padding: padding_all(1, false),
                 title: 'Tracks'
             }, [
-                ui.rectangle({
+                ui.panel({
                     child_dir: Direction.Vertical
                 }, [
-                    ui.rectangle({ w: size_grow(), h: size_static(1), bg: color('#FFF') }, [ ui.text(selectedTrack, 'Selected track') ], 'selected'),
-                    ...tracks.map((v)=>ui.text(track, v.file))
+                    // ui.rectangle({ w: size_grow(), h: size_static(1), bg: color('#FFF') }, [ ui.text(selectedTrack, 'Selected track') ], 'selected'),
+                    ...tracks.map((v)=>ui.panel({ h: size_static(1) }, [ ui.text(track, v.file), ui.text({...track, w: size_grow(), padding: padding_all(0)}, v.tag?.artists?.join(', ') ?? '') ]))
                 ]),
-                ui.rectangle({
+                ui.panel({
                     w: size_static(1),
                 }),
-                ui.rectangle({
+                ui.panel({
                     w: size_static(1),
                     bg: color('#808080')
                 })
             ], `Tracks`),
-            ui.rectangle({
+            ui.panel({
                 w: size_static(30),
                 padding: padding_all(1),
                 child_dir: Direction.Vertical,
                 title: 'Active'
             }, [
-                ui.rectangle({
+                ui.panel({
                     padding: padding_down(1),
                     centered: Direction.Horizontal,
                     w: size_static(26),
@@ -74,12 +76,12 @@ const commands = ui.layout(
                 }, `Artist`, 'artist'),
             ], 'SideBar'),
         ]),
-        ui.rectangle({
+        ui.panel({
             h: size_static(4),
             centered: Direction.Horizontal | Direction.Vertical
         }, [
             ui.text({ fg: color('#FFF') }, '0:00'),
-            ui.rectangle({ bg: color('#FFF'), w: size_percentage(50), h: size_static(1) }, [], 'id'),
+            ui.panel({ bg: color('#FFF'), w: size_percentage(50), h: size_static(1) }, [], 'volume'),
             ui.text({ fg: color('#FFF') }, '1:00'),
         ])
     ], 'OuterContainer'), w, h, 0, 0
