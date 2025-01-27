@@ -60,13 +60,15 @@ export function asCString(str: string): Uint8Array {
  * An abstracted music player.
  */
 export class Player extends TypedEventEmitter<{
-    pos_update: [number]
+    pos_update: [number],
+    pos_end: []
 }> {
     protected paused: boolean;
     protected loaded: boolean;
     protected music: Deno.PointerValue;
     protected int: number;
     protected prevPosition: number;
+    protected queue: string[]
 
     constructor() {
         super();
@@ -74,11 +76,15 @@ export class Player extends TypedEventEmitter<{
         this.music = null;
         this.prevPosition = 0;
         this.paused = false;
+        this.queue = [];
         this.int = setInterval(() => {
             if(this.getPosition() != this.prevPosition) {
                 this.emit('pos_update', this.getPosition());
-
                 this.prevPosition = this.getPosition();
+
+                if (this.getPosition() == this.getTotalLength()){
+                    this.emit('pos_end');
+                }
             }
         }, 5);
 
