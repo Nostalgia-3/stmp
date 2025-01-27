@@ -26,7 +26,7 @@ export class Renderer {
             this.c[x+Math.min(y, this.height-1)*this.width][1] = c;
         } catch(e) {
             const { columns, rows } = Deno.consoleSize();
-            console.error(`setBG(${x}, ${y}) FAILED ; ${x+y*this.width} (${columns}, ${rows})`);
+            console.error(`setBG(${x}, ${y}) FAILED @ point ${x+y*this.width} [${this.c[x+y*this.width]}] (col=${columns-1}, rows=${rows})`);
             throw e;
         }
     }
@@ -47,7 +47,7 @@ export class Renderer {
 
     clearText(x: number, y: number, w: number, h: number) {
         for(let i=0;i<h;i++) {
-            this.s += `${utils.cursorTo(x, i)}${utils.frgb(this.getBG(x, y+i), false)}${''.padStart(w, ' ')}`;
+            this.s += `${utils.cursorTo(x, y+i)}${utils.frgb(this.getBG(x, y+i), false)}${''.padStart(w, ' ')}`;
         }
         this.s += `\x1b[0m`;
     }
@@ -63,15 +63,15 @@ export class Renderer {
     }
 
     text(x: number, y: number, s: string, fg?: utils.Gradient, bg?: utils.Gradient, styles: Partial<TextStyles> = {}) {
-        this.s += utils.cursorTo(x,y);
+        this.s += utils.cursorTo(x,y) + utils.enableStyles(styles);
         for(let i=0;i<s.length;i++) {
             const fgc = fg ? utils.interpolate(fg[0], fg[1], i/s.length) : this.getFG(x+i, y);
             const bgc = bg ? utils.interpolate(bg[0], bg[1], i/s.length) : this.getBG(x+i, y);
             if(fg) this.setFG(x + i, y, fgc);
             if(bg) this.setBG(x + i, y, bgc);
-            this.s += `${utils.enableStyles(styles)}${utils.frgb(bgc, false)}${utils.frgb(fgc, true)}${s[i]}${utils.disableStyles(styles)}`;
+            this.s += `${utils.frgb(bgc, false)}${utils.frgb(fgc, true)}${s[i]}`;
         }
-        this.s += `\x1b[0m`;
+        this.s += utils.disableStyles(styles) + `\x1b[0m`;
     }
 
     vline(x: number, y: number, h: number, fg: utils.Gradient, bg?: utils.Gradient, ch: string = '│') {
@@ -102,7 +102,7 @@ export class Renderer {
             const col = utils.interpolate(bg[0], bg[1], i/h);
             for(let j=0;j<w;j++)
                 this.setBG(x+j, y+i, col);
-            this.s += `${utils.cursorTo(x,y+i)}${utils.frgb(col, false)}${''.padStart(w, ' ')}`;
+            this.s += `${utils.cursorTo(x,y+i)}${utils.frgb(col, false)}${''.padStart(w)}`;
         }
         this.s += `\x1b[0m`;
     }
@@ -115,7 +115,7 @@ export class Renderer {
         this.text(x, y+h-1, `╰${''.padEnd(w-2, '─')}╯`, fg);
     }
 
-    size(w: number, h: number) {
+    resize(w: number, h: number) {
         this.width = w;
         this.height = h;
         this.c = [];
@@ -131,8 +131,12 @@ export class Renderer {
         }
     }
 
-    flush() {
+    draw() {
         utils.write(this.s);
+        this.s = '';
+    }
+
+    flush() {
         this.s = '';
     }
 }

@@ -33,12 +33,12 @@ export type Tag = {
 function readTextString(fb: FancyBuffer, size: number) {
     const st = (fb.readU8() == 1) 
         ? fb.readLenUTF16String(size-2)
-        : fb.readLenAsciiString(size-2);
+        : fb.readLenUTF8String(size-2);
     fb.skip(1);
     return st;
 }
 
-function getVersion3(fb: FancyBuffer) {
+function getVersion3(fb: FancyBuffer, _file: string) {
     fb.skip(10);
 
     const t: Tag = {};
@@ -83,13 +83,13 @@ function getVersion3(fb: FancyBuffer) {
     return t;
 }
 
-function getVersion4(fb: FancyBuffer) {
+function getVersion4(fb: FancyBuffer, _file: string) {
     fb.skip(10);
 
     const t: Tag = {};
     while(1) {
         const tag   = fb.readLenUTF8String(4);
-        if(tag.length == 0) break;
+        if(tag.length == 0 || tag == '\0\0\0\0') break;
         const size  = (fb.readU8() << 21) | (fb.readU8() << 14) | (fb.readU8() << 7) | fb.readU8();
         const _flags = fb.readU16BE();
 
@@ -179,10 +179,10 @@ export async function getFileID3(file: string): Promise<Tag | undefined> {
 
     if(major == 3) {
         fb = new FancyBuffer(frames);
-        return getVersion3(fb);
+        return getVersion3(fb, file);
     } else if(major == 4)  {
         fb = new FancyBuffer(frames);
-        return getVersion4(fb);
+        return getVersion4(fb, file);
     }
 
     return;
