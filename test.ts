@@ -29,7 +29,8 @@ const tracks: Track[] = [
     { tag: { artists: ['abc'] }, file: 'A third track!' }
 ];
 
-const commands = ui.layout(
+const nt = ui.layout(
+    w, h, 0, 0,
     ui.panel({
         child_dir: Direction.Vertical,
         // bg: color("#7851A9", "#857d9c")
@@ -84,9 +85,19 @@ const commands = ui.layout(
             ui.panel({ bg: color('#FFF'), w: size_percentage(50), h: size_static(1) }, [], 'volume'),
             ui.text({ fg: color('#FFF') }, '1:00'),
         ])
-    ], 'OuterContainer'), w, h, 0, 0
+    ], 'OuterContainer'),
 );
 
+function printSizeTree(s: Record<string, unknown>, indent = 0) {
+    console.log(`${''.padStart(indent)}${s.id ?? 'unknown'}(x=${s.x}, y=${s.y}, w=${s.w}, h=${s.h}, type=${s.type}, children=${(s.children as Record<string,unknown>[])?.length})`);
+    for(let i=0;i<((s.children as Record<string, unknown>[])?.length ?? 0);i++) {
+        printSizeTree((s.children as Record<string, unknown>[])[i], indent + 2);
+    }
+}
+
+printSizeTree(nt);
+
+const commands = ui.draw(nt);
 const rend = new Renderer(w, h);
 rend.clear(utils.grad([0,0,0]));
 for(const command of commands) {

@@ -55,11 +55,16 @@ export type ItuiStyle = {
 
 export type ContentNode = {
     id?: string,
-    type: 'rect' | 'text' | 'image' | 'hslider' | 'vslider',
+    type: 'panel' | 'text' | 'image' | 'hslider' | 'vslider',
     style: Partial<ItuiStyle>,
     children: ContentNode[],
     content?: unknown
 };
+
+export type SizeNode = {
+    x: number, y: number, w: number, h: number,
+    children: SizeNode[]
+} & ContentNode;
 
 export type RenderCommand =
     { _id: string, type: 'rect', x: number, y: number, w: number, h: number, title?: string, bg?: Gradient } |
@@ -68,10 +73,6 @@ export type RenderCommand =
     { _id: string, type: 'hline', x: number, y: number, w: number, h: number, fg?: Gradient, bg?: Gradient };
 
 export class Itui {
-    constructor() {
-
-    }
-
     protected parseSize(size: Size = size_grow(), v: number): { v: number, type: 'consume' | 'grow' | 'shrink' } {
         switch(size.type) {
             case "percentage": return { v: Math.ceil(v * Math.min(size.val, 1)), type: 'consume' };
@@ -83,23 +84,23 @@ export class Itui {
     protected hPadding(size: { v: number, consume: boolean }, padding?: Padding) {
         if(!padding) return size;
         size.v -= padding.left + padding.right;
-        // size.v -= (padding.left+padding.right);
         return size;
     }
     protected vPadding(size: { v: number, consume: boolean }, padding?: Padding) {
         if(!padding) return size;
-        // size.v += padding.top + padding.bottom;
-        // size.v -= (padding.left + padding.right);
         return size;
     }
 
+    constructor() {
+
+    }
+
     /**
-     * Parse a node tree, returning a list of
-     * renderer commands.
-     * @param node The root node in a node tree to parse
+     * Parse a node tree, returning a node tree with data included
+     * @returns 
      */
-    layout(node: ContentNode, w: number, h: number, x: number, y: number) {
-        let renderCommands: RenderCommand[] = [];
+    layout(w: number, h: number, x: number, y: number, node: ContentNode): SizeNode {
+        let sNode: SizeNode;
 
         const dir = node.style.child_dir ?? Direction.Horizontal;
 
@@ -109,30 +110,16 @@ export class Itui {
         let cY = y;
 
         switch(node.type) {
-            case 'rect':
-                renderCommands.push({ _id: node.id ?? '?', type: 'rect', x: cX, y: cY, w: cW.v, h: cH.v, title: node.style.title, bg: node.style.bg });
-            break;
-
+            case 'panel':
             case 'text':
-                renderCommands.push({ _id: node.id ?? '?', type: 'text', x: cX, y: cY, text: (node.content as string).slice(0, w), fg: node.style.fg });
+            case 'hslider':
+            case 'vslider':
+                sNode = ({ ...node, children: [], x: cX, y: cY, w: cW.v, h: cH.v }) as unknown as SizeNode;
             break;
 
-            case 'hslider': {
-                renderCommands.push({ _id: node.id ?? '?', type: 'rect', x: cX, y: cY, w: cW.v, h: cH.v, bg: node.style.bg });
-                renderCommands.push({ _id: node.id ?? '?', type: 'rect', x: cX, y: cY, w: cW.v, h: cH.v, bg: node.style.fg });
-                // this.rend.text(
-                //     Math.floor((this.ui.bottomBarWidth-Math.floor(this.ui.bottomBarWidth/2))/2),
-                //     this.ui.trackHeight+Math.floor(this.ui.bottomBarHeight/2),
-                //     ''.padEnd(Math.floor(this.ui.bottomBarWidth/2 * this.player.getPosition()/(this.player.getTotalLength() ?? 1)), this.ui.playbar_fillchar),
-                //     this.ui.playbar_fillcolor
-                // );
-
-                // const percentScrolled = (this.trackOff)/(this.tracks.length);
-                // const size = Math.floor((this.ui.trackHeight-2)/this.tracks.length*(this.ui.trackHeight-2));
-                // const offset = Math.ceil((this.ui.trackHeight-2) * percentScrolled);
-                // this.rend.vline(this.ui.trackWidth-2, 1, this.ui.trackHeight-2, sfg, undefined, '▐');
-                // this.rend.vline(this.ui.trackWidth-2, 1+offset, size, pfg, undefined, '▐');
-            break; }
+            default:
+                sNode = ({ type: 'panel', id: node.id, x: cX, y: cY, w: cW.v, h: cH.v, children: [], style: { ...node.style, bg: undefined } });
+            break;
         }
 
         cX += (node.style.padding?.left ?? 0);
@@ -177,24 +164,62 @@ export class Itui {
             const size = ((s.type == 'consume') ? s.v : Math.ceil(free_space/grow_node_count));
 
             if(dir == Direction.Horizontal) {
-                renderCommands = renderCommands.concat(
-                    this.layout(
-                        node.children[i],
-                        size, cH.v, // -(node.style.padding?.right ?? 0)
-                        cX, cY
-                    )
-                );
+                sNode.children.push(this.layout(
+                    size, cH.v,
+                    cX, cY,
+                    node.children[i]
+                ));
                 cX += size;
             } else {
-                renderCommands = renderCommands.concat(
-                    this.layout(
-                        node.children[i],
-                        cW.v-(node.style.padding?.right ?? 0), size,
-                        cX, cY,
-                    )
-                );
+                sNode.children.push(this.layout(
+                    cW.v-(node.style.padding?.right ?? 0), size,
+                    cX, cY,
+                    node.children[i]
+                ));
                 cY += size + (node.children[i].style.padding?.bottom ?? 0);
             }
+        }
+
+        return sNode;
+    }
+
+    /**
+     * Parse a computed node tree, producing render commands
+     * @param node The root node in a node tree to parse
+     */
+    draw(node: SizeNode): RenderCommand[] {
+        let renderCommands: RenderCommand[] = [];
+
+        if(node.w > 0 && node.h > 0)
+        switch(node.type) {
+            case 'panel':
+                renderCommands.push({ _id: node.id ?? '?', type: 'rect', x: node.x, y: node.y, w: node.w, h: node.h, title: node.style.title, bg: node.style.bg });
+            break;
+
+            case 'text':
+                renderCommands.push({ _id: node.id ?? '?', type: 'text', x: node.x, y: node.y, text: (node.content as string).slice(0, node.w), fg: node.style.fg });
+            break;
+
+            case 'hslider': {
+                renderCommands.push({ _id: node.id ?? '?', type: 'rect', x: node.x, y: node.y, w: node.w, h: node.h, bg: node.style.bg });
+                renderCommands.push({ _id: node.id ?? '?', type: 'rect', x: node.x, y: node.y, w: node.w, h: node.h, bg: node.style.fg });
+                // this.rend.text(
+                //     Math.floor((this.ui.bottomBarWidth-Math.floor(this.ui.bottomBarWidth/2))/2),
+                //     this.ui.trackHeight+Math.floor(this.ui.bottomBarHeight/2),
+                //     ''.padEnd(Math.floor(this.ui.bottomBarWidth/2 * this.player.getPosition()/(this.player.getTotalLength() ?? 1)), this.ui.playbar_fillchar),
+                //     this.ui.playbar_fillcolor
+                // );
+
+                // const percentScrolled = (this.trackOff)/(this.tracks.length);
+                // const size = Math.floor((this.ui.trackHeight-2)/this.tracks.length*(this.ui.trackHeight-2));
+                // const offset = Math.ceil((this.ui.trackHeight-2) * percentScrolled);
+                // this.rend.vline(this.ui.trackWidth-2, 1, this.ui.trackHeight-2, sfg, undefined, '▐');
+                // this.rend.vline(this.ui.trackWidth-2, 1+offset, size, pfg, undefined, '▐');
+            break; }
+        }
+
+        for(let i=0;i<node.children.length;i++) {
+            renderCommands = renderCommands.concat(this.draw(node.children[i]));
         }
 
         return renderCommands;
@@ -223,7 +248,7 @@ export class Itui {
      */
     panel(style: Partial<ItuiStyle>, children?: ContentNode[], id?: string) {
         return {
-            id, type: 'rect',
+            id, type: 'panel',
             style, children: children ?? []
         } as ContentNode;
     }
