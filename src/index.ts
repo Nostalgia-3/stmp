@@ -13,7 +13,6 @@ type Track = {
 };
 
 const TEMP_PATH = `/home/nostalgia3/Music/`;
-// const TEMP_PATH = `D:/Music/mp3`;
 
 class App extends utils.TypedEventEmitter<{
     click: [number, number, number, boolean],
@@ -25,7 +24,9 @@ class App extends utils.TypedEventEmitter<{
     protected rend: Renderer;
     protected size: { w: number, h: number };
     protected tracks: Track[];
+    protected queue: Track[];
     protected trackSel: number;
+    protected queueSel: number;
     protected trackOff: number;
 
     protected dragX: number;
@@ -35,6 +36,7 @@ class App extends utils.TypedEventEmitter<{
     protected activeTrack?: Track;
 
     protected player: Player;
+
 
     protected ui = {
         titleMaxWidth:      30, // Maximum title width
@@ -46,6 +48,7 @@ class App extends utils.TypedEventEmitter<{
         trackHeight:        -1,
         playingNowHeight:   -1,
     };
+    
 
     constructor() {
         super();
@@ -53,6 +56,8 @@ class App extends utils.TypedEventEmitter<{
         const { columns: w, rows: h } = Deno.consoleSize();
         this.size = { w, h };
         this.tracks = [];
+        this.queue = [];
+        this.queueSel = 0;
         this.trackSel = 0;
         this.trackOff = 0;
 
@@ -63,8 +68,27 @@ class App extends utils.TypedEventEmitter<{
 
         this.player = new Player();
 
+
         this.player.on('pos_update', () => {
             this.drawScrubber();
+        });
+
+        this.player.on('pos_end', () => {
+            if (!this.queueSel) this.queueSel = this.trackSel;
+            //If this isn't a if else we will skip the first song if we loop around
+            if (this.queueSel + 1 >= this.queue.length) {
+                this.queueSel = 0;
+                this.trackSel = 0;
+            }
+            else {
+                this.queueSel++;
+                this.trackSel++;
+            }
+            this.player.loadFile(path.join(TEMP_PATH, this.queue[this.queueSel].file));
+            this.player.play(0);
+            this.activeTrack = this.queue[this.queueSel];
+            
+            this.render();
         });
 
         this.rend = new Renderer(this.size.w, this.size.h);
@@ -90,6 +114,7 @@ class App extends utils.TypedEventEmitter<{
             const tags = await getFileID3(`${TEMP_PATH}/${entry.name}`);
 
             this.tracks.push({ file: entry.name, tag: tags });
+            this.queue.push({ file: entry.name, tag: tags })
         }
         // this.tracks.sort((a,b)=>(a.title??a.file).length-(b.title??b.file).length);
 
