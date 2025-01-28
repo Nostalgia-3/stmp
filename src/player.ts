@@ -82,7 +82,7 @@ export class Player extends TypedEventEmitter<{
                 this.emit('pos_update', this.getPosition());
                 this.prevPosition = this.getPosition();
 
-                if (this.getPosition() == this.getTotalLength()){
+                if(this.getPosition() == this.getTotalLength()) {
                     this.emit('pos_end');
                 }
             }

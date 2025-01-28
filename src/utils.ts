@@ -234,7 +234,7 @@ export function enableMouse() {
     // mouse ?? = 1006
     // mouse ??? = 1015
     // 1003
-    write(`\x1b[?1000;1006;1015h`);
+    write(`\x1b[?1000;1003;1006;1015h`);
 }
 
 export function disableMouse() {

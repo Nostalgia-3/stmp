@@ -7,6 +7,12 @@ import { Renderer } from "./renderer.ts";
 import * as utils from './utils.ts';
 import { getFileID3, Tag } from "./id3.ts";
 
+import {
+    Itui, color, Direction, SizeNode, ContentNode, ItuiStyle,
+    padding_all, size_grow, size_static,
+    padding,
+} from './itui.ts';
+
 type Track = {
     tag?:       Tag,
     file:       string
@@ -19,8 +25,23 @@ type Setting = {
     value: unknown
 };
 
+enum State {
+    Normal,
+    Lyrics,
+    FullQueue
+};
+
+// function printSizeTree(s: Record<string, unknown>, indent = 0) {
+//     console.log(`${''.padStart(indent)}${s.id ?? 'unknown'}(x=${s.x}, y=${s.y}, w=${s.w}, h=${s.h}, type=${s.type}, children=${(s.children as Record<string,unknown>[])?.length})`);
+//     for(let i=0;i<((s.children as Record<string, unknown>[])?.length ?? 0);i++) {
+//         printSizeTree((s.children as Record<string, unknown>[])[i], indent + 2);
+//     }
+// }
+
 // const TEMP_PATH = `/home/nostalgia3/Music/`;
 const TEMP_PATH = `D:/Music/mp3/`;
+
+const ui = new Itui();
 
 class App extends utils.TypedEventEmitter<{
     click: [number, number, number, boolean],
@@ -62,41 +83,17 @@ class App extends utils.TypedEventEmitter<{
         // secondary_fg:       utils.grad([192, 192, 192]),
         primary_fg: utils.grad(utils.parseHexColor(`#DFDFDF`)),
         secondary_fg: utils.grad(utils.parseHexColor(`#1ED760`)),
-        bg: [
-            utils.parseHexColor(`#232526`),
-            utils.parseHexColor(`#414345`),
-        ]
-        // bg:                 [[97, 67, 133], [81, 99, 149]] // Kashmir
-        // bg:                 [utils.parseHexColor(`#283048`), utils.parseHexColor(`#859398`)]
+        // bg: color(`#232526`, `#414345`),
+        bg: color([97, 67, 133], [81, 99, 149]), // Kashmir
+        // bg: color(`#283048`, `#859398`),
         // [[238, 156, 167], [255, 221, 225]]    // Piglet
         // [[255, 95, 109], [255, 195, 113]]     // Sweet Morning
     };
 
-    protected ui = {
-        titleMaxWidth:      50, // Maximum title width
+    protected ui: ContentNode;
+    protected nt: SizeNode;
 
-        playingNowWidth:    30,
-        bottomBarWidth:     -1,
-        bottomBarHeight:    4,
-        trackWidth:         -1,
-        trackHeight:        -1,
-        playingNowHeight:   -1,
-
-        settingsWidth:      75,
-        settingsHeight:     20,
-
-        ...this.theme
-    };
-
-    protected settings: Setting[] = [
-        {
-            id: 'test',
-            name: `Example Setting`,
-            type: 'boolean',
-            description: `This is an example setting.`,
-            value: false,
-        },
-    ];
+    protected state: State;
 
     constructor() {
         super();
@@ -109,6 +106,8 @@ class App extends utils.TypedEventEmitter<{
         this.trackSel = 0;
         this.trackOff = 0;
 
+        this.state = State.Lyrics;
+
         this.dragX = 0;
         this.dragY = 0;
 
@@ -116,30 +115,144 @@ class App extends utils.TypedEventEmitter<{
 
         this.player = new Player();
 
-
         this.player.on('pos_update', () => {
             this.drawScrubber();
         });
 
         this.player.on('pos_end', () => {
-            if (!this.queueSel) this.queueSel = this.trackSel;
-            //If this isn't a if else we will skip the first song if we loop around
-            if (this.queueSel + 1 >= this.queue.length) {
-                this.queueSel = 0;
-                this.trackSel = 0;
-            }
-            else {
-                this.queueSel++;
-                this.trackSel++;
-            }
-            this.player.loadFile(path.join(TEMP_PATH, this.queue[this.queueSel].file));
-            this.player.play(0);
-            this.activeTrack = this.queue[this.queueSel];
-            
+            this.playNextInQueue();
             this.render();
         });
 
         this.rend = new Renderer(this.size.w, this.size.h);
+
+        this.ui = ui.panel({});
+        this.updateUI();
+
+        this.nt = ui.layout(this.size.w, this.size.h, 0, 0, this.ui);
+    }
+
+    updateUI() {
+        const position = parseFloat(this.player.getPosition().toFixed(0));
+        const minutesPlayed = (position - (position % 60))/60;
+        const secondsPlayed = position % 60;
+
+        const length = parseFloat(this.player.getTotalLength().toFixed(0));
+        const totalSeconds = length % 60;
+        const totalMinutes = (length - totalSeconds)/60;
+
+        const playbar = ui.panel({
+            w: size_grow(),
+            h: size_static(3),
+            padding: padding(1, 0, 1, 0),
+            // centered: Direction.Horizontal | Direction.Vertical,
+            child_padding: 1,
+        }, [
+            ui.panel({
+                w: size_static(15),
+                h: size_static(1),
+                child_padding: 1
+            }, [
+                ui.button({ bg: color('#FFF'), fg: color('#000'), w: size_static(4), h: size_static(1) }, `<<`, 'previous'),
+                ui.button({ bg: color('#FFF'), fg: color('#000'), w: size_static(4), h: size_static(1) }, `|>`, 'play-pause'),
+                ui.button({ bg: color('#FFF'), fg: color('#000'), w: size_static(4), h: size_static(1) }, `>>`, 'forwards')
+            ], 'media-controls'),
+            ui.text({ fg: color('#FFF') }, `${minutesPlayed}:${secondsPlayed.toString().padStart(2,'0')}`),
+            ui.hprogress({ fg: color('#FFF'), bg: color('#888'), w: size_grow(), h: size_static(1), thin: true }, Math.floor(this.player.getPosition()), Math.floor(this.player.getTotalLength()), 'play'),
+            ui.text({ fg: color('#FFF') }, `${totalMinutes}:${totalSeconds.toString().padStart(2,'0')}`),
+        ], 'playbar');
+
+        switch(this.state) {
+            case State.Lyrics: {
+                this.ui = ui.panel({
+                    child_dir: Direction.Vertical, bg: this.theme.bg,
+                }, [ ui.panel({ title: 'Lyrics', padding: padding_all(1, true) }, [
+                    ui.panel({ bg: color('#FFF'), grow: 1, child_dir: Direction.Vertical, centered: Direction.Horizontal }, [
+                        ui.panel({ bg: color('#323'), h: size_static(3), w: size_static(6) })
+                    ]),
+                    ui.panel({ bg: color('#000'), grow: 3 }),
+                ]), playbar ])
+            break; }
+
+            case State.Normal: {
+                const titleMaxWidth = 40;
+                let longestTrackTitle = 0;
+                for(let i=0;i<this.tracks.length;i++) {
+                    if((this.tracks[i].tag?.title?.length ?? this.tracks[i].file.length) > longestTrackTitle) {
+                        longestTrackTitle = (this.tracks[i].tag?.title?.length ?? this.tracks[i].file.length);
+                    }
+                    if(longestTrackTitle > titleMaxWidth) {
+                        longestTrackTitle = titleMaxWidth;
+                        break;
+                    }
+                }
+
+                const trackStyle: Partial<ItuiStyle> = {
+                    w: size_static(longestTrackTitle+1),
+                    fg: color('#FFF'),
+                    clickable: false
+                };
+
+                this.ui = ui.panel({
+                    child_dir: Direction.Vertical,
+                    bg: this.theme.bg
+                }, [
+                    ui.panel({}, [
+                        ui.panel({
+                            child_dir: Direction.Horizontal,
+                            // padding: padding_all(1),
+                            title: 'Tracks'
+                        }, [
+                            ui.scrollPanel({
+                                child_dir: Direction.Vertical
+                            }, this.trackOff, [
+                                ...this.tracks.map((v,i)=>{
+                                    return ui.panel(
+                                        { h: size_static(1), bg: (i==this.trackSel)?color('#FFF'):undefined }, [
+                                            ui.text({ ...trackStyle, fg: (i==this.trackSel)?color('#000'):color('#FFF') }, v.tag?.title ?? v.file),
+                                            ui.text({...trackStyle, fg: (i==this.trackSel)?color('#000'):color('#FFF'), w: size_grow(), padding: padding_all(0)}, v.tag?.artists?.join(', ') ?? '')
+                                        ], `track::file>${v.file}`
+                                    )
+                                })
+                            ], 'tracks'),
+                        ]),
+                        ui.panel({
+                            w: size_static(30),
+                            child_dir: Direction.Vertical
+                        }, [
+                            ui.panel({ padding: padding(0, 0, 1, 1, false), title: 'Active', child_dir: Direction.Vertical, child_padding: 1 }, [
+                                ui.panel({
+                                    centered: Direction.Horizontal,
+                                    w: size_static(26),
+                                    h: size_static(11),
+                                    bg: color('#323232')
+                                }, undefined, 'ImageTodo'),
+                                ui.panel({
+                                    child_dir: Direction.Vertical
+                                }, [
+                                    ui.text({
+                                        fg: color(`#ffffff`),
+                                    }, this.activeTrack ? (this.activeTrack.tag?.title ?? this.activeTrack.file) : `Title`, 'title'),
+                                    ui.text({
+                                        fg: color(`#808080`),
+                                    }, this.activeTrack ? (this.activeTrack.tag?.artists?.join(', ') ?? '') : `Artists`, 'artist')
+                                ], 'SideBar'),
+                            ]),
+                            ui.panel({
+                                w: size_static(30),
+                                child_dir: Direction.Vertical,
+                                title: 'Queue'
+                            }, [
+                                ...this.queue.slice(this.queueSel-((this.queueSel==0)?0:1)).map((v,i)=>{
+                                    return ui.text({ ...trackStyle, fg: color('#FFF'), w: size_static(28) }, ((i==((this.queueSel==0)?0:1))?'> ':'  ') + (v.tag?.title ?? v.file));
+                                })
+                            ], 'text'),
+                        ], 'SideBar')
+                    ]),
+                    playbar
+                ], 'OuterContainer');
+            break; }
+        }
     }
 
     exit() {
@@ -181,6 +294,10 @@ class App extends utils.TypedEventEmitter<{
             }
         }, 1);
 
+        // Initialize the node table
+        this.updateUI();
+        this.nt = ui.layout(this.size.w, this.size.h, 0, 0, this.ui);
+
         this.render();
         
         for await(const keypress of readKeypress(Deno.stdin)) {
@@ -220,21 +337,20 @@ class App extends utils.TypedEventEmitter<{
                     case 'up':
                     case 'k':
                         this.trackUp();
-                        this.drawTracks();
                         break;
     
                     case 'down':
                     case 'j':
                         this.trackDown();
-                        this.drawTracks();
                         break;
 
                     case 'return':
-                        this.playAt();
+                        this.playSelectedTrack();
+                        this.renderNow = true;
                         break;
                     
                     case 'space':
-                        this.toggle();
+                        this.togglePlaying();
                     break;
     
                     default:
@@ -248,265 +364,93 @@ class App extends utils.TypedEventEmitter<{
         }
     }
 
-    render() {
-        const { columns: w, rows: h } = Deno.consoleSize();
-        this.size = { w, h };
-        this.rend.resize(w, h);
+    renderNode(n: SizeNode) {
+        const commands = ui.draw(n);
+        for(const command of commands) {
+            try {
+                switch(command.type) {
+                    case 'text': {
+                        const comm = command as { type: 'text', x: number, y: number, text: string, fg?: utils.Gradient, bg?: utils.Gradient };
+                        this.rend.text(comm.x, comm.y, comm.text, comm.fg);
+                    break; }
+                        
+                    case 'rect': {
+                        const comm = command as { type: 'rect', x: number, y: number, w: number, h: number, title?: string, bg?: utils.Gradient };
+                        if(comm.title)
+                            this.rend.box(comm.x, comm.y, comm.w, comm.h, comm.title, color('#FFF'), comm.bg);
+                        else
+                        this.rend.rect(comm.x, comm.y, comm.w, comm.h, comm.bg);
+                    break; }
 
-        this.ui.bottomBarWidth  = w;
-        this.ui.bottomBarHeight = 4;
-        this.ui.trackWidth      = w-this.ui.playingNowWidth;
-        this.ui.trackHeight     = h-this.ui.bottomBarHeight;
-        this.ui.playingNowHeight= h-this.ui.bottomBarHeight;
-        
-        this.rend.clear(this.ui.bg as utils.Gradient);
-
-        if(w < this.ui.playingNowWidth) {
-            // draw smaller UI
-        } else {
-            this.drawTracks(false);
-            this.drawScrubber(false);
-            this.drawMediaControls(false);
-            this.drawSideInfo(false);
-            // this.drawSettings(false);
+                    case 'vline': {
+                        const comm = command;
+                        this.rend.hline(comm.x, comm.y, comm.w, comm.fg ?? color('#000'), comm.bg);
+                    break; }
+                }
+            } catch(e) {
+                console.log(command);
+                throw e;
+            }
         }
 
         this.rend.draw();
     }
 
-    drawTracks(flush = true) {
-        const pfg = this.ui.primary_fg;
-        const sfg = this.ui.secondary_fg;
+    render() {
+        const { columns: w, rows: h } = Deno.consoleSize();
+        this.size = { w, h };
+        this.rend.resize(w, h);
 
-        if(flush) {
-            this.rend.rect(
-                0, 0, this.ui.trackWidth, this.ui.trackHeight,
-                [this.ui.bg[0] as utils.RGB, utils.interpolate(
-                    this.ui.bg[0] as utils.RGB,
-                    this.ui.bg[1] as utils.RGB,
-                    (this.ui.trackHeight)/this.size.h
-                )]
-            );
-        }
-
-        this.rend.box(0, 0, this.ui.trackWidth, this.ui.trackHeight, 'Tracks', pfg);
-
-        if(this.tracks.length == 0) {
-            if(flush) this.rend.draw();
-            return;
-	    }
-
-        // This is "slow", but unless the track list is absolutely massive,
-        // it should be fine
-        let longestTrackTitle = 0;
-        for(let i=0;i<this.tracks.length;i++) {
-            if((this.tracks[i].tag?.title?.length ?? this.tracks[i].file.length) > longestTrackTitle) {
-                longestTrackTitle = (this.tracks[i].tag?.title?.length ?? this.tracks[i].file.length);
-            }
-            if(longestTrackTitle > this.ui.titleMaxWidth) {
-                longestTrackTitle = this.ui.titleMaxWidth;
-                break;
-            }
-        }
-
-        for(let i=0;i<this.ui.trackHeight-2;i++) {
-            if(this.tracks[this.trackOff+i] == undefined) {
-                break;
-            }
-
-            const track     = this.tracks[this.trackOff+i];
-
-            const selected  = this.trackSel == (i+this.trackOff);
-            const fore      = (track.file == this.activeTrack?.file)
-                ? this.ui.playing_song_fg
-                : (selected ? this.ui.selected_song_fg : pfg);
-
-            if(selected) this.rend.rect(1, i+1, this.ui.trackWidth-3, 1, this.ui.selected_song_bg);
-            this.rend.text(
-                1, i+1,
-                ((track?.tag?.title ?? utils.filename(track.file))
-                    .slice(0, this.ui.titleMaxWidth)
-                    .padEnd(longestTrackTitle+1) +
-                (track.tag?.artists?.join(', ') ?? '')).slice(0, this.ui.trackWidth-2),
-                fore, undefined
-            );
-        }
-
-        // Track scrubber
-        if(this.tracks.length < this.ui.trackHeight-2) {
-            this.rend.vline(this.ui.trackWidth-2, 1, this.ui.trackHeight-2, pfg, undefined, '▐');
-        } else {
-            const percentScrolled = (this.trackOff)/(this.tracks.length);
-            const size = Math.floor((this.ui.trackHeight-2)/this.tracks.length*(this.ui.trackHeight-2));
-            const offset = Math.ceil((this.ui.trackHeight-2) * percentScrolled);
-            this.rend.vline(this.ui.trackWidth-2, 1, this.ui.trackHeight-2, sfg, undefined, '▐');
-            this.rend.vline(this.ui.trackWidth-2, 1+offset, size, pfg, undefined, '▐');
-        }
-
-        if(flush) this.rend.draw();
+        this.updateUI();
+        this.nt = ui.layout(w, h, 0, 0, this.ui);
+        this.renderNode(this.nt);
     }
 
-    drawScrubber(flush = true) {
-        const pfg = this.ui.primary_fg;
-        
-        const position = parseFloat(this.player.getPosition().toFixed(0));
-        const minutesPlayed = (position - (position % 60))/60;
-        const secondsPlayed = position % 60;
-
-        const length = parseFloat(this.player.getTotalLength().toFixed(0));
-        const totalSeconds = length % 60;
-        const totalMinutes = (length - totalSeconds)/60;
-
-        const played = `${minutesPlayed}:${secondsPlayed.toString().padStart(2,'0')}`;
-
-        this.rend.text(
-            Math.floor((this.ui.bottomBarWidth-Math.floor(this.ui.bottomBarWidth/2))/2)-played.length-1,
-            this.ui.trackHeight+Math.floor(this.ui.bottomBarHeight/2),
-            played,
-            pfg
-        );
-        this.rend.text(
-            Math.floor((this.ui.bottomBarWidth-Math.floor(this.ui.bottomBarWidth/2))/2),
-            this.ui.trackHeight+Math.floor(this.ui.bottomBarHeight/2),
-            ''.padEnd(Math.floor(this.ui.bottomBarWidth/2), this.ui.playbar_char),
-            this.ui.playbar_color
-        );
-        this.rend.text(
-            Math.floor((this.ui.bottomBarWidth-Math.floor(this.ui.bottomBarWidth/2))/2),
-            this.ui.trackHeight+Math.floor(this.ui.bottomBarHeight/2),
-            ''.padEnd(Math.floor(this.ui.bottomBarWidth/2 * this.player.getPosition()/(this.player.getTotalLength() ?? 1)), this.ui.playbar_fillchar),
-            this.ui.playbar_fillcolor
-        );
-        this.rend.text(
-            Math.floor((this.ui.bottomBarWidth-Math.floor(this.ui.bottomBarWidth/2))/2)+Math.floor(this.ui.bottomBarWidth/2)+1,
-            this.ui.trackHeight+Math.floor(this.ui.bottomBarHeight/2),
-            `${totalMinutes}:${totalSeconds.toString().padStart(2,'0')}`,
-            pfg
-        );
-
-        if(flush) this.rend.draw();
-    }
-
-    drawMediaControls(flush = true) {
-        this.drawButton(
-            Math.floor((this.ui.bottomBarWidth-Math.floor(this.ui.bottomBarWidth/2))/2)+Math.floor(this.ui.bottomBarWidth/4)-5,
-            this.ui.trackHeight+1,
-            '<<', utils.grad([0, 0, 0]), utils.grad([255, 255, 255])
-        );
-
-        this.drawButton(
-            Math.floor((this.ui.bottomBarWidth-Math.floor(this.ui.bottomBarWidth/2))/2)+Math.floor(this.ui.bottomBarWidth/4),
-            this.ui.trackHeight+1,
-            this.player.isPaused() ? '|>' : '||', utils.grad([0, 0, 0]), utils.grad([255, 255, 255])
-        );
-
-        this.drawButton(
-            Math.floor((this.ui.bottomBarWidth-Math.floor(this.ui.bottomBarWidth/2))/2)+Math.floor(this.ui.bottomBarWidth/4)+5,
-            this.ui.trackHeight+1,
-            '>>', utils.grad([0, 0, 0]), utils.grad([255, 255, 255])
-        );
-
-        const {w, h} = this.size;
-        this.drawButton(w-this.ui.playingNowWidth+18, h-2, `Settings`, utils.grad([0, 0, 0]), utils.grad([255, 255, 255]));
-
-        if(flush) this.rend.draw();
-    }
-
-    drawSideInfo(flush = true) {
-        const { w } = this.size;
-        const pfg = this.ui.primary_fg;
-        const sfg = this.ui.secondary_fg;
-
-        if(flush) this.rend.clearText(w-this.ui.playingNowWidth, 0, this.ui.playingNowWidth, this.ui.playingNowHeight);
-
-        const imgHeight = Math.floor((this.ui.playingNowWidth-4)/2)-1;
-        this.rend.box(w-this.ui.playingNowWidth, 0, this.ui.playingNowWidth, this.ui.playingNowHeight, 'Active', pfg);
-        this.rend.rect(w-this.ui.playingNowWidth+2, 2, this.ui.playingNowWidth-4, imgHeight, utils.grad([0,0,0]));
-        this.rend.text(w-this.ui.playingNowWidth+2, imgHeight+3, `${this.activeTrack ? (this.activeTrack.tag?.title ?? this.activeTrack.file).slice(0, this.ui.playingNowWidth-4) : 'Song title'}`, pfg);
-        this.rend.text(w-this.ui.playingNowWidth+2, imgHeight+4, `${this.activeTrack ? (this.activeTrack.tag?.artists?.join(', ') ?? '') : 'Artist'}`, sfg);
-
-        if(flush) this.rend.draw();
-    }
-
-    drawSettings(flush = true) {
-        const { w, h } = this.size;
-        const pfg = this.ui.primary_fg;
-        const sfg = this.ui.secondary_fg;
-
-        this.rend.clearText(
-            Math.floor((w-this.ui.settingsWidth)/2), Math.floor((h-this.ui.settingsHeight)/2),
-            this.ui.settingsWidth, this.ui.settingsHeight
-        );
-        this.rend.box(
-            Math.floor((w-this.ui.settingsWidth)/2), Math.floor((h-this.ui.settingsHeight)/2),
-            this.ui.settingsWidth, this.ui.settingsHeight,
-            `Settings`, pfg
-        );
-
-        for(let i=0;i<this.settings.length;i++) {
-            this.rend.text(
-                Math.floor((w-this.ui.settingsWidth)/2)+2,
-                Math.floor((h-this.ui.settingsHeight)/2)+1+i*2,
-                this.settings[i].name,
-                pfg
-            );
-            this.rend.text(
-                Math.floor((w-this.ui.settingsWidth)/2)+2,
-                Math.floor((h-this.ui.settingsHeight)/2)+2+i*2,
-                this.settings[i].description,
-                sfg
-            );
-            switch(this.settings[i].type) {
-                case 'boolean':
-                    this.drawSlider(
-                        Math.floor((w+this.ui.settingsWidth)/2)-6,
-                        Math.floor((h-this.ui.settingsHeight)/2)+1+i*2,
-                        this.settings[i].value as boolean,
-                        pfg
-                    );
-                break;
-            }
-        }
-        
-        if(flush) this.rend.draw();
-    }
-
-    drawSlider(x: number, y: number, active: boolean, bg?: utils.Gradient) {
-        this.rend.rect(x+1, y, 2, 1, active ? utils.grad([0,255,0]) : utils.grad([255,0,0]));
-        if(active) {
-            this.rend.text(x+1, y, ` \ue0b6\ue0b4`, bg);
-            this.rend.text(x, y, `\ue0b6`, utils.grad([0,255,0]));
-        } else {
-            this.rend.text(x, y, `\ue0b6\ue0b4`, bg);
-            this.rend.text(x+3, y, `\ue0b4`, utils.grad([255,0,0]));
-        }
-    }
-
-    drawButton(x: number, y: number, s: string, fg?: utils.Gradient, bg?: utils.Gradient) {
-        this.rend.rect(x+1, y, s.length, 1, bg);
-        this.rend.text(x, y, `\ue0b6${''.padStart(s.length)}\ue0b4`, bg);
-        this.rend.text(x+1, y, s, fg);
+    drawScrubber() {
+        this.updateUI();
+        this.nt = ui.layout(this.size.w, this.size.h, 0, 0, this.ui);
+        const playbar = ui.getElementById(this.nt, 'playbar');
+        if(!playbar) return;
+        this.renderNode(playbar);
     }
 
     handleClick(x: number, y: number) {
-        const pStart = Math.floor((this.ui.bottomBarWidth-Math.floor(this.ui.bottomBarWidth/2))/2)+Math.floor(this.ui.bottomBarWidth/4);
+        const el = ui.click(this.nt, x, y);
+        if(!el) return;
+        if(!el.id) return;
 
-        if( x >= 1 && x < this.ui.trackWidth-1 && y > 1 && y < this.ui.trackHeight) {
+        switch(el.id) {
+            case 'play-pause':
+                this.togglePlaying();
+                this.render();
+            break;
+
+            case 'previous':
+                if(this.player.getPosition() < 2)
+                    this.playPreviousInQueue();
+                else
+                    this.playCurrentInQueue();
+                    this.render();
+            break;
+
+            case 'forwards':
+                this.playNextInQueue();
+                this.render();
+            break;
+        }
+
+        if(el.id.startsWith('track::file>')) {
             this.selectWithOffset(y-2);
-        } else if(x >= pStart && x <= pStart+4 && y == this.ui.trackHeight+2) {
-            this.toggle();
         }
     }
 
     handleScroll(x: number, y: number, count: number) {
-        if( x >= 1 && x < this.ui.trackWidth-1 && y > 1 && y < this.ui.trackHeight) {
-            if(count > 0) {
-                app.scrollDown(5);
-            } else {
-                app.scrollUp(5);
-            }
-
-            app.drawTracks();
+        const tracks = ui.getElementById(this.nt, 'tracks');
+        if(!tracks) return;
+        if(ui.inRange(tracks, x, y)) {
+            if(count > 0) app.scrollDown(5);
+            else app.scrollUp(5);
+            app.render();
         }
     }
 
@@ -515,23 +459,23 @@ class App extends utils.TypedEventEmitter<{
             // utils.bell();
         } else if((this.trackSel-this.trackOff) > 0) {
             this.trackSel--;
-            this.drawTracks();
+            this.render();
         } else {
             this.trackSel--;
             this.trackOff--;
-            this.drawTracks();
+            this.render();
         }
     }
 
     trackDown() {
         if(this.trackSel > this.tracks.length-2) {
             // utils.bell();
-        } else if((this.trackSel-this.trackOff) < this.ui.trackHeight-3) {
+        } else if((this.trackSel-this.trackOff) < (ui.getElementById(this.nt, 'tracks')?.h ?? 1)-1) {
             this.trackSel++;
-            this.drawTracks();
+            this.render();
         } else {
             this.trackOff++; this.trackSel++;
-            this.drawTracks();
+            this.render();
         }
     }
 
@@ -547,7 +491,7 @@ class App extends utils.TypedEventEmitter<{
 
     scrollDown(c = 1) {
         for(let i=0;i<c;i++) {
-            if(this.trackOff > this.tracks.length-this.ui.trackHeight+1) {
+            if(this.trackOff > this.tracks.length-(ui.getElementById(this.nt, 'tracks')?.h ?? 1)-1) {
                 utils.bell();
                 break;
             } else {
@@ -556,17 +500,52 @@ class App extends utils.TypedEventEmitter<{
         }
     }
 
-    playAt() {
+    playSelectedTrack() {
         this.player.loadFile(path.join(TEMP_PATH, this.tracks[this.trackSel].file));
         this.player.play(0);
         this.activeTrack = this.tracks[this.trackSel];
-        this.drawSideInfo(true);
+        this.queueSel = this.trackSel;
+    }
+
+    playCurrentInQueue() {
+        if(!this.activeTrack) return;
+        this.player.loadFile(path.join(TEMP_PATH, this.activeTrack.file));
+        this.player.play(0);
+        this.activeTrack = this.queue[this.queueSel];
+    }
+
+    playPreviousInQueue() {
+        // if (!this.queueSel) this.queueSel = this.trackSel;
+        //If this isn't a if else we will skip the first song if we loop around
+        if (this.queueSel == 0) {
+            this.queueSel = this.queue.length-1;
+        } else {
+            this.queueSel--;
+        }
+
+        this.player.loadFile(path.join(TEMP_PATH, this.queue[this.queueSel].file));
+        this.player.play(0);
+        this.activeTrack = this.queue[this.queueSel];
+    }
+
+    playNextInQueue() {
+        // if (!this.queueSel) this.queueSel = this.trackSel;
+        //If this isn't a if else we will skip the first song if we loop around
+        if (this.queueSel >= this.queue.length-1) {
+            this.queueSel = 0;
+        } else {
+            this.queueSel++;
+        }
+
+        this.player.loadFile(path.join(TEMP_PATH, this.queue[this.queueSel].file));
+        this.player.play(0);
+        this.activeTrack = this.queue[this.queueSel];
     }
 
     selectWithOffset(x: number) {
         if(this.tracks[this.trackOff + x]) {
             if(this.trackSel == this.trackOff + x) {
-                this.playAt();
+                this.playSelectedTrack();
             } else {
                 this.trackSel = this.trackOff + x;
             }
@@ -577,19 +556,17 @@ class App extends utils.TypedEventEmitter<{
     /**
      * Toggle whether the audio is playing or not
      */
-    toggle() {
+    togglePlaying() {
         if(this.player.isPaused())
             this.player.resume();
         else
             this.player.pause();
 
-        this.drawMediaControls();
-        this.rend.draw();
+        this.drawScrubber();
     }
 }
 
 import process from 'node:process';
-
 process.on('beforeExit', () => {
     utils.disableMouse();
     utils.setAltBuffer(false);
