@@ -112,10 +112,10 @@ export class Player extends TypedEventEmitter<{
 
     /**
      * Set the volume of the loaded file
-     * @param v A value from 0 to 1
+     * @param v A value from 0 to 65535
      */
     setVolume(v: number) {
-        mixer.Mix_VolumeMusic(Math.floor(Math.max(Math.min(v, 1.0), 0)*128));
+        mixer.Mix_VolumeMusic(Math.floor(Math.max(Math.min(v, 128), 0.0)));
     }
 
     getVolume() {
@@ -137,12 +137,13 @@ export class Player extends TypedEventEmitter<{
     }
 
     play(loops = 0) {
-        if(!this.loaded) return;
+        if(!this.loaded) return false;
 
         if(mixer.Mix_PlayMusic(this.music, loops) < 0) {
-
+            return false;
         } else {
             this.paused = false;
+            return true
         }
     }
 

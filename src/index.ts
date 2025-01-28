@@ -38,8 +38,8 @@ enum State {
 //     }
 // }
 
-// const TEMP_PATH = `/home/nostalgia3/Music/`;
-const TEMP_PATH = `D:/Music/mp3/`;
+const TEMP_PATH = `/home/nostalgia3/Music/`;
+//const TEMP_PATH = `D:/Music/mp3/`;
 
 const ui = new Itui();
 
@@ -95,6 +95,8 @@ class App extends utils.TypedEventEmitter<{
 
     protected state: State;
 
+    protected volume: number;
+
     constructor() {
         super();
 
@@ -106,7 +108,10 @@ class App extends utils.TypedEventEmitter<{
         this.trackSel = 0;
         this.trackOff = 0;
 
-        this.state = State.Lyrics;
+        // this.player.getVolume()
+        this.volume = 1;
+
+        this.state = State.Normal;
 
         this.dragX = 0;
         this.dragY = 0;
@@ -114,6 +119,7 @@ class App extends utils.TypedEventEmitter<{
         this.renderNow = true;
 
         this.player = new Player();
+        this.player.setVolume(this.volume*128);
 
         this.player.on('pos_update', () => {
             this.drawScrubber();
@@ -149,13 +155,14 @@ class App extends utils.TypedEventEmitter<{
             child_padding: 1,
         }, [
             ui.panel({
-                w: size_static(15),
+                w: size_static(20),
                 h: size_static(1),
                 child_padding: 1
             }, [
                 ui.button({ bg: color('#FFF'), fg: color('#000'), w: size_static(4), h: size_static(1) }, `<<`, 'previous'),
                 ui.button({ bg: color('#FFF'), fg: color('#000'), w: size_static(4), h: size_static(1) }, `|>`, 'play-pause'),
-                ui.button({ bg: color('#FFF'), fg: color('#000'), w: size_static(4), h: size_static(1) }, `>>`, 'forwards')
+                ui.button({ bg: color('#FFF'), fg: color('#000'), w: size_static(4), h: size_static(1) }, `>>`, 'forwards'),
+                ui.text({ fg: color('#FFF') }, `${Math.ceil(this.volume*100).toString().padStart(3)}%`)
             ], 'media-controls'),
             ui.text({ fg: color('#FFF') }, `${minutesPlayed}:${secondsPlayed.toString().padStart(2,'0')}`),
             ui.hprogress({ fg: color('#FFF'), bg: color('#888'), w: size_grow(), h: size_static(1), thin: true }, Math.floor(this.player.getPosition()), Math.floor(this.player.getTotalLength()), 'play'),
@@ -349,6 +356,20 @@ class App extends utils.TypedEventEmitter<{
                         this.renderNow = true;
                         break;
                     
+                    case '[':
+                    case '-':
+                        this.volume = Math.max(this.volume - 0.05, 0);
+                        this.player.setVolume(this.volume*128);
+                        this.render();
+                    break;
+
+                    case '+':
+                    case ']':
+                        this.volume = Math.min(this.volume + 0.05, 128);
+                        this.player.setVolume(this.volume*128);
+                        this.render();
+                    break;
+                    
                     case 'space':
                         this.togglePlaying();
                     break;
@@ -370,16 +391,16 @@ class App extends utils.TypedEventEmitter<{
             try {
                 switch(command.type) {
                     case 'text': {
-                        const comm = command as { type: 'text', x: number, y: number, text: string, fg?: utils.Gradient, bg?: utils.Gradient };
-                        this.rend.text(comm.x, comm.y, comm.text, comm.fg);
+                        const comm = command;
+                        this.rend.text(comm.x, comm.y, comm.text, comm.fg, comm.bg);
                     break; }
                         
                     case 'rect': {
-                        const comm = command as { type: 'rect', x: number, y: number, w: number, h: number, title?: string, bg?: utils.Gradient };
+                        const comm = command;
                         if(comm.title)
                             this.rend.box(comm.x, comm.y, comm.w, comm.h, comm.title, color('#FFF'), comm.bg);
                         else
-                        this.rend.rect(comm.x, comm.y, comm.w, comm.h, comm.bg);
+                            this.rend.rect(comm.x, comm.y, comm.w, comm.h, comm.bg);
                     break; }
 
                     case 'vline': {
