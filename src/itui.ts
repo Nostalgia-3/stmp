@@ -160,13 +160,13 @@ export class Itui {
         }
 
         if((node.style.centered ?? 0) & Direction.Horizontal) {
-            if(dir == Direction.Horizontal) { cX += Math.ceil((total_space-used_space)/2); }
-            else                            { cX += Math.ceil((cW.v)/2); }
+            if(dir == Direction.Horizontal) { cX += Math.floor((total_space-used_space)/2); }
+            else                            { cX += Math.floor((cW.v)/2); }
         }
 
         if((node.style.centered ?? 0) & Direction.Vertical) {
-            if(dir == Direction.Vertical)   cY += Math.ceil((total_space-used_space)/2);
-            else                            cY += Math.ceil((cH.v)/2);
+            if(dir == Direction.Vertical)   cY += Math.floor((total_space-used_space)/2);
+            else                            cY += Math.floor((cH.v)/2);
         }
 
         let sPercentage = 0;
@@ -176,7 +176,7 @@ export class Itui {
                 : this.parseSize(node.children[i].style.h, cH.v)
             ;
 
-            const size = ((s.type == 'consume') ? s.v : Math.ceil(((node.children[i].style.grow??1)/grow_node_count)*free_space));
+            const size = ((s.type == 'consume') ? s.v : Math.floor(((node.children[i].style.grow??1)/grow_node_count)*free_space));
 
             // This is REALLY bad; it completely scrolls past full elements,
             // which is not what should happen (e.g. a panel within a
@@ -191,7 +191,7 @@ export class Itui {
 
             if(dir == Direction.Horizontal) {
                 sNode.children.push(this.layout(
-                    size, cH.v,
+                    (size+cX > w) ? (w - (size+cX)) : size, cH.v,
                     cX, cY,
                     node.children[i]
                 ));

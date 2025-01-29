@@ -7,6 +7,9 @@ import { Renderer } from "./renderer.ts";
 import * as utils from './utils.ts';
 import { getFileID3, Tag } from "./id3.ts";
 
+// const TEMP_PATH = `/home/nostalgia3/Music/`;
+const TEMP_PATH = `D:/Music/mp3/`;
+
 import {
     Itui, color, Direction, SizeNode, ContentNode, ItuiStyle,
     padding_all, size_grow, size_static,
@@ -31,15 +34,34 @@ enum State {
     FullQueue
 };
 
-// function printSizeTree(s: Record<string, unknown>, indent = 0) {
-//     console.log(`${''.padStart(indent)}${s.id ?? 'unknown'}(x=${s.x}, y=${s.y}, w=${s.w}, h=${s.h}, type=${s.type}, children=${(s.children as Record<string,unknown>[])?.length})`);
-//     for(let i=0;i<((s.children as Record<string, unknown>[])?.length ?? 0);i++) {
-//         printSizeTree((s.children as Record<string, unknown>[])[i], indent + 2);
+export function printSizeTree(s: Record<string, unknown>, indent = 0) {
+    console.log(`${''.padStart(indent)}${s.id ?? 'unknown'}(x=${s.x}, y=${s.y}, w=${s.w}, h=${s.h}, type=${s.type}, children=${(s.children as Record<string,unknown>[])?.length})`);
+    for(let i=0;i<((s.children as Record<string, unknown>[])?.length ?? 0);i++) {
+        printSizeTree((s.children as Record<string, unknown>[])[i], indent + 2);
+    }
+}
+
+// const ipc = new DiscordIPC('1331978897146908723');
+
+// ipc.connect();
+
+// ipc.setActivity({
+//     details: '{title}', state: '{artists}', type: ActivityType.Listening,
+//     assets: {
+//         large_text: 'In {album}'
 //     }
+// });
+
+// const t = await getFileID3('D:/Music/mp3/[Official] Celeste Original Soundtrack - 18 - Reach for the Summit [iDVM9KED46Q].mp3');
+
+// const isrc = t?.extra.find((v)=>v.name=='TSRC');
+
+// if(isrc != undefined) {
+//     console.log(isrc.value as string);
+//     await fetch(`https://musicbrainz.org/ws/2/isrc/${isrc.value as string}?fmt=json`);
 // }
 
-const TEMP_PATH = `/home/nostalgia3/Music/`;
-//const TEMP_PATH = `D:/Music/mp3/`;
+// setInterval(()=>{});
 
 const ui = new Itui();
 
@@ -48,7 +70,11 @@ class App extends utils.TypedEventEmitter<{
     scroll: [number, number, number],
     keypress: [Keypress],
     drag: [number, number, number, number, number],
-    mouse_move: [number, number]
+    mouse_move: [number, number],
+    music_start: [Track],
+    music_resume: [Track],
+    music_pause: [Track],
+    music_end: [Track]
 }> {
     protected rend: Renderer;
     protected size: { w: number, h: number };
@@ -121,8 +147,9 @@ class App extends utils.TypedEventEmitter<{
         this.player = new Player();
         this.player.setVolume(this.volume*128);
 
-        this.player.on('pos_update', () => {
-            this.drawScrubber();
+        this.player.on('pos_update', (pos) => {
+            if(Math.floor(pos) == Math.ceil(pos))
+                this.drawScrubber();
         });
 
         this.player.on('pos_end', () => {
@@ -151,7 +178,6 @@ class App extends utils.TypedEventEmitter<{
             w: size_grow(),
             h: size_static(3),
             padding: padding(1, 0, 1, 0),
-            // centered: Direction.Horizontal | Direction.Vertical,
             child_padding: 1,
         }, [
             ui.panel({
@@ -169,6 +195,22 @@ class App extends utils.TypedEventEmitter<{
             ui.text({ fg: color('#FFF') }, `${totalMinutes}:${totalSeconds.toString().padStart(2,'0')}`),
         ], 'playbar');
 
+        const trackStyle: Partial<ItuiStyle> = {
+            fg: color('#FFF'),
+            clickable: false
+        };
+
+        const queue = ui.panel({
+            w: size_static(30),
+            grow: 1,
+            child_dir: Direction.Vertical,
+            title: 'Queue'
+        }, [
+            ...this.queue.slice(this.queueSel-((this.queueSel==0)?0:1)).map((v,i)=>{
+                return ui.text({ ...trackStyle, fg: color('#FFF'), w: size_static(28) }, ((i==((this.queueSel==0)?0:1))?'> ':'  ') + (v.tag?.title ?? v.file));
+            })
+        ], 'queue');
+
         switch(this.state) {
             case State.Lyrics: {
                 this.ui = ui.panel({
@@ -183,22 +225,35 @@ class App extends utils.TypedEventEmitter<{
 
             case State.Normal: {
                 const titleMaxWidth = 40;
+                const artistMaxWidth = 30;
+                const albumMaxWidth = 30;
+
                 let longestTrackTitle = 0;
+                let longestArtist = 0;
+                let longestAlbum = 0;
+
                 for(let i=0;i<this.tracks.length;i++) {
                     if((this.tracks[i].tag?.title?.length ?? this.tracks[i].file.length) > longestTrackTitle) {
                         longestTrackTitle = (this.tracks[i].tag?.title?.length ?? this.tracks[i].file.length);
                     }
                     if(longestTrackTitle > titleMaxWidth) {
                         longestTrackTitle = titleMaxWidth;
-                        break;
+                    }
+
+                    if((this.tracks[i].tag?.artists?.join(', ') ?? '').length > longestArtist) {
+                        longestArtist = (this.tracks[i].tag?.artists?.join(', ') ?? '').length;
+                    }
+                    if(longestArtist > artistMaxWidth) {
+                        longestArtist = artistMaxWidth;
+                    }
+
+                    if((this.tracks[i].tag?.album ?? '').length > longestAlbum) {
+                        longestAlbum = (this.tracks[i].tag?.artists?.join(', ') ?? '').length;
+                    }
+                    if(longestAlbum > albumMaxWidth) {
+                        longestAlbum = albumMaxWidth;
                     }
                 }
-
-                const trackStyle: Partial<ItuiStyle> = {
-                    w: size_static(longestTrackTitle+1),
-                    fg: color('#FFF'),
-                    clickable: false
-                };
 
                 this.ui = ui.panel({
                     child_dir: Direction.Vertical,
@@ -207,17 +262,19 @@ class App extends utils.TypedEventEmitter<{
                     ui.panel({}, [
                         ui.panel({
                             child_dir: Direction.Horizontal,
-                            // padding: padding_all(1),
                             title: 'Tracks'
                         }, [
                             ui.scrollPanel({
                                 child_dir: Direction.Vertical
                             }, this.trackOff, [
                                 ...this.tracks.map((v,i)=>{
+                                    const fg = (i==this.trackSel)?color('#000'):color('#FFF');
+
                                     return ui.panel(
-                                        { h: size_static(1), bg: (i==this.trackSel)?color('#FFF'):undefined }, [
-                                            ui.text({ ...trackStyle, fg: (i==this.trackSel)?color('#000'):color('#FFF') }, v.tag?.title ?? v.file),
-                                            ui.text({...trackStyle, fg: (i==this.trackSel)?color('#000'):color('#FFF'), w: size_grow(), padding: padding_all(0)}, v.tag?.artists?.join(', ') ?? '')
+                                        { h: size_static(1), bg: (i==this.trackSel)?color('#FFF'):undefined, child_padding: 1 }, [
+                                            ui.text({ ...trackStyle, w: size_static(longestTrackTitle), fg }, v.tag?.title ?? v.file),
+                                            ui.text({ ...trackStyle, w: size_static(longestArtist), fg }, v.tag?.artists?.join(', ') ?? ''),
+                                            ui.text({ ...trackStyle, w: size_grow(), fg }, v.tag?.album ?? '')
                                         ], `track::file>${v.file}`
                                     )
                                 })
@@ -227,7 +284,7 @@ class App extends utils.TypedEventEmitter<{
                             w: size_static(30),
                             child_dir: Direction.Vertical
                         }, [
-                            ui.panel({ padding: padding(0, 0, 1, 1, false), title: 'Active', child_dir: Direction.Vertical, child_padding: 1 }, [
+                            ui.panel({ padding: padding(0, 0, 1, 1, false), title: 'Active', child_dir: Direction.Vertical, child_padding: 1, grow: 1, h: size_static(18) }, [
                                 ui.panel({
                                     centered: Direction.Horizontal,
                                     w: size_static(26),
@@ -243,17 +300,9 @@ class App extends utils.TypedEventEmitter<{
                                     ui.text({
                                         fg: color(`#808080`),
                                     }, this.activeTrack ? (this.activeTrack.tag?.artists?.join(', ') ?? '') : `Artists`, 'artist')
-                                ], 'SideBar'),
+                                ], 'playing-now'),
                             ]),
-                            ui.panel({
-                                w: size_static(30),
-                                child_dir: Direction.Vertical,
-                                title: 'Queue'
-                            }, [
-                                ...this.queue.slice(this.queueSel-((this.queueSel==0)?0:1)).map((v,i)=>{
-                                    return ui.text({ ...trackStyle, fg: color('#FFF'), w: size_static(28) }, ((i==((this.queueSel==0)?0:1))?'> ':'  ') + (v.tag?.title ?? v.file));
-                                })
-                            ], 'text'),
+                            queue,
                         ], 'SideBar')
                     ]),
                     playbar
