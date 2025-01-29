@@ -85,13 +85,13 @@ export class Renderer {
         this.s += `\x1b[0m`;
     }
 
-    hline(x: number, y: number, w: number, fg: utils.Gradient, bg?: utils.Gradient) {
+    hline(x: number, y: number, w: number, fg: utils.Gradient, bg?: utils.Gradient, ch = '─') {
         for(let i=0;i<w;i++) {
             const fgc = utils.interpolate(fg[0], fg[1], i/w);
             const bgc = bg ? utils.interpolate(bg[0], bg[1], i/w) : this.getBG(x, y+i);
             this.setFG(x+i, y, fgc);
             if(bg) this.setBG(x+i, y, bgc);
-            this.s += `${utils.cursorTo(x+i,y)}${utils.frgb(fgc, true)}${utils.frgb(bgc, false)}│`;
+            this.s += `${utils.cursorTo(x+i,y)}${utils.frgb(fgc, true)}${utils.frgb(bgc, false)}${ch}`;
         }
         this.s += `\x1b[0m`;
     }

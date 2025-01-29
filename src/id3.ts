@@ -27,7 +27,9 @@ export type Tag = {
     comment?: string,
     track?: number,
     totalTracks?: number,
-    genre?: Genre
+    genre?: Genre,
+    isrc?: string,
+    extra: { name: string, value?: string }[]
 };
 
 function readTextString(fb: FancyBuffer, size: number) {
@@ -41,7 +43,7 @@ function readTextString(fb: FancyBuffer, size: number) {
 function getVersion3(fb: FancyBuffer, _file: string) {
     fb.skip(10);
 
-    const t: Tag = {};
+    const t: Tag = { extra: [] };
 
     while(1) {
         const tag   = fb.readLenAsciiString(4);
@@ -74,8 +76,17 @@ function getVersion3(fb: FancyBuffer, _file: string) {
                 t.album = readTextString(fb, size);
             break;
 
+            case 'TSRC':
+                t.isrc = readTextString(fb, size);
+            break;
+
             default:
-                fb.skip(size);
+                if(!tag.startsWith('T')) {
+                    fb.skip(size);
+                    t.extra.push({ name: tag });
+                } else {
+                    t.extra.push({ name: tag, value: tag.startsWith('T') ? readTextString(fb, size) : undefined });
+                }
             break;
         }
     }
@@ -86,7 +97,7 @@ function getVersion3(fb: FancyBuffer, _file: string) {
 function getVersion4(fb: FancyBuffer, _file: string) {
     fb.skip(10);
 
-    const t: Tag = {};
+    const t: Tag = { extra: [] };
     while(1) {
         const tag   = fb.readLenUTF8String(4);
         if(tag.length == 0 || tag == '\0\0\0\0') break;
@@ -122,7 +133,12 @@ function getVersion4(fb: FancyBuffer, _file: string) {
             break;
 
             default:
-                fb.skip(size);
+                if(!tag.startsWith('T')) {
+                    fb.skip(size);
+                    t.extra.push({ name: tag });
+                } else {
+                    t.extra.push({ name: tag, value: tag.startsWith('T') ? readTextString(fb, size) : undefined });
+                }
             break;
         }
     }
@@ -141,7 +157,8 @@ function getLegacy(fb: FancyBuffer): Tag | undefined {
         album:  fb.readLenUTF8String(30).split('\0')[0],
         year:   fb.readLenUTF8String(4),
         comment:fb.readLenUTF8String(30).split('\0')[0],
-        genre:  fb.readU8()
+        genre:  fb.readU8(),
+        extra: []
     };
 }
 
