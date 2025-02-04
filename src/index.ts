@@ -7,8 +7,8 @@ import { Renderer } from "./renderer.ts";
 import * as utils from './utils.ts';
 import { getFileID3, Tag } from "./id3.ts";
 
- const TEMP_PATH = `/home/nostalgia3/Music/`;
-//const TEMP_PATH = `D:/Music/mp3/`;
+const TEMP_PATH = `/home/nostalgia3/Music/`;
+// const TEMP_PATH = `D:/Music/mp3/`;
 
 import {
     Itui, color, Direction, SizeNode, ContentNode, ItuiStyle,
@@ -91,6 +91,7 @@ class App extends utils.TypedEventEmitter<{
     protected activeTrack?: Track;
 
     protected player: Player;
+    protected settings: SettingsManager;
 
     protected theme = {
         // const fillCharacter = '━';
@@ -133,6 +134,10 @@ class App extends utils.TypedEventEmitter<{
         this.queueSel = 0;
         this.trackSel = 0;
         this.trackOff = 0;
+
+        this.settings = new SettingsManager('.config.json', {
+            music_path: ''
+        });
 
         // this.player.getVolume()
         this.volume = 1;
@@ -269,6 +274,9 @@ class App extends utils.TypedEventEmitter<{
                             }, this.trackOff, [
                                 ...this.tracks.map((v,i)=>{
                                     const fg = (i==this.trackSel)?color('#000'):color('#FFF');
+                                    // const fg = color('#FFF');
+
+                                    // color('#FFF')
 
                                     return ui.panel(
                                         { h: size_static(1), bg: (i==this.trackSel)?color('#FFF'):undefined, child_padding: 1 }, [
@@ -473,6 +481,7 @@ class App extends utils.TypedEventEmitter<{
 
         this.updateUI();
         this.nt = ui.layout(w, h, 0, 0, this.ui);
+        // utils.write('\x1b[2J');
         this.renderNode(this.nt);
     }
 
@@ -485,10 +494,15 @@ class App extends utils.TypedEventEmitter<{
     }
 
     drawTracks() {
+        // this.render();
         this.updateUI();
         this.nt = ui.layout(this.size.w, this.size.h, 0, 0, this.ui);
         const tracks = ui.getElementById(this.nt, 'tracks');
         if(!tracks) return;
+        tracks.style.bg = [
+            utils.interpolate(this.theme.bg[0], this.theme.bg[1], tracks.y/this.size.h),
+            utils.interpolate(this.theme.bg[0], this.theme.bg[1], tracks.h/this.size.h)
+        ];
         this.renderNode(tracks);
     }
 
@@ -646,6 +660,7 @@ class App extends utils.TypedEventEmitter<{
 }
 
 import process from 'node:process';
+import { SettingsManager } from "./settings.ts";
 process.on('beforeExit', () => {
     utils.disableMouse();
     utils.setAltBuffer(false);

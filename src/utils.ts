@@ -182,21 +182,104 @@ export function interpolate(c1: RGB, c2: RGB, f: number): RGB {
     ];
 }
 
-export function blend(c1: RGB, c2: RGB) {
-    return grad(interpolate(c1, c2, 0.5));
-}
-
 export function write(s: string) {
     // console.log(s.length);
     // if(s.length > 5000) return;
     writeAllSync(Deno.stderr, new TextEncoder().encode(s));
 }
 
-export function frgb(rgb: RGB, foreground: boolean) {
-    if(foreground)
-        return `\x1b[38;2;${rgb[0]};${rgb[1]};${rgb[2]}m`;
-    else
-        return `\x1b[48;2;${rgb[0]};${rgb[1]};${rgb[2]}m`;
+// This is roughly what all the terminal colors
+// are
+const terminalColors = [
+    [0, 0, 0],          // 0: black
+    [205, 0, 0],        // 1: red
+    [0, 205, 0],        // 2: green
+    [205, 205, 0],      // 3: yellow
+    [0, 0, 205],        // 4: blue
+    [205, 0, 205],      // 5: magenta
+    [0, 205, 205],      // 6: cyan
+    [229, 229, 229],    // 7: white
+    [127, 127, 127],    // 8: bright black (gray)
+    [255, 0, 0],        // 9: bright red
+    [0, 255, 0],        // 10: bright green
+    [255, 255, 0],      // 11: bright yellow
+    [92, 92, 255],      // 12: bright blue
+    [255, 0, 255],      // 13: bright magenta
+    [0, 255, 255],      // 14: bright cyan
+    [255, 255, 255],    // 15: bright white
+];
+
+export function frgb(rgb: RGB, foreground: boolean, convert?: '16-color' | '256-color') {
+    if(convert == '16-color') {
+        let closestColorIndex = 0;
+        let minDistance = Infinity;
+
+        for (let i = 0; i < terminalColors.length; i++) {
+            const color = terminalColors[i];
+            const distance = Math.sqrt(
+                Math.pow(rgb[0] - color[0], 2) + Math.pow(rgb[1] - color[1], 2) + Math.pow(rgb[2] - color[2], 2)
+            );
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestColorIndex = i;
+            }
+        }
+
+        // Return the closest terminal color index
+        if(foreground) {
+            if(closestColorIndex < 8) return `\x1b[3${closestColorIndex}m`;
+            return `\x1b[9${closestColorIndex-8}m`;
+        } else {
+            if(closestColorIndex < 8) return `\x1b[4${closestColorIndex}m`;
+            return `\x1b[10${closestColorIndex-8}m`;
+        }
+    } else if(convert == '256-color') {
+        const colorCube = [];
+        for (let rIndex = 0; rIndex <= 5; rIndex++) {
+            for (let gIndex = 0; gIndex <= 5; gIndex++) {
+                for (let bIndex = 0; bIndex <= 5; bIndex++) {
+                    colorCube.push([
+                        Math.round(rIndex * 42.5),  // Scale from 0-255 in 6 levels
+                        Math.round(gIndex * 42.5),
+                        Math.round(bIndex * 42.5)
+                    ]);
+                }
+            }
+        }
+
+        // Grayscale colors (232-255)
+        const grayscaleColors = [];
+        for (let i = 0; i < 24; i++) {
+            const grayValue = Math.round(i * 10.5); // Scale from 0 to 255 in 24 levels
+            grayscaleColors.push([grayValue, grayValue, grayValue]);
+        }
+
+        // Combine all the colors (16 basic colors + 216 colors from the color cube + 24 grayscale colors)
+        const allColors = [...terminalColors, ...colorCube, ...grayscaleColors];
+
+        // Calculate the closest color by finding the smallest Euclidean distance
+        let closestColorIndex = 0;
+        let minDistance = Infinity;
+
+        for (let i = 0; i < allColors.length; i++) {
+            const color = allColors[i];
+            const distance = Math.sqrt(
+                Math.pow(rgb[0] - color[0], 2) + Math.pow(rgb[1] - color[1], 2) + Math.pow(rgb[2] - color[2], 2)
+            );
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestColorIndex = i;
+            }
+        }
+
+        if(foreground) return `\x1b[38;5;${closestColorIndex}m`;
+        else return `\x1b[48;5;${closestColorIndex}m`
+    } else {
+        if(foreground)
+            return `\x1b[38;2;${rgb[0]};${rgb[1]};${rgb[2]}m`;
+        else
+            return `\x1b[48;2;${rgb[0]};${rgb[1]};${rgb[2]}m`;
+    }
 }
 
 export function parseHexColor(hex: string): RGB {

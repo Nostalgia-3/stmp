@@ -1,4 +1,4 @@
-import { parseHexColor } from "./utils.ts";
+import { interpolate, parseHexColor } from "./utils.ts";
 
 export type Color       = [number, number, number];
 export type Size        = { type: 'percentage' | 'grow' | 'static', val: number };
@@ -102,7 +102,7 @@ export class Itui {
      * Parse a node tree, returning a node tree with data included
      * @returns 
      */
-    layout(w: number, h: number, x: number, y: number, node: ContentNode): SizeNode {
+    layout(w: number, h: number, x: number, y: number, node: ContentNode, pbg?: Gradient): SizeNode {
         let sNode: SizeNode;
 
         if(node.style.title) {
@@ -128,7 +128,7 @@ export class Itui {
             case 'scrollPanel':
             case 'button':
             case 'image':
-                sNode = ({ ...node, children: [], x: cX, y: cY, w: cW.v, h: cH.v }) as unknown as SizeNode;
+                sNode = ({ ...node, children: [], x: cX, y: cY, w: cW.v, h: cH.v }) as SizeNode;
             break;
 
             default:
