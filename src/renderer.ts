@@ -64,13 +64,17 @@ export class Renderer {
 
     text(x: number, y: number, s: string, fg?: utils.Gradient, bg?: utils.Gradient, styles: Partial<TextStyles> = {}) {
         this.s += utils.cursorTo(x,y) + utils.enableStyles(styles);
+        if(fg && fg[0] == fg[1]) this.s += `${utils.frgb(fg[0], true)}`;
+        if(bg && bg[0] == bg[1]) this.s += `${utils.frgb(bg[0], false)}`;
+
         for(let i=0;i<s.length;i++) {
             const fgc = fg ? utils.interpolate(fg[0], fg[1], i/s.length) : this.getFG(x+i, y);
             const bgc = bg ? utils.interpolate(bg[0], bg[1], i/s.length) : this.getBG(x+i, y);
             if(fg) this.setFG(x + i, y, fgc);
             if(bg) this.setBG(x + i, y, bgc);
-            this.s += `${utils.frgb(bgc, false)}${utils.frgb(fgc, true)}${s[i]}`;
+            this.s += `${(bg == undefined || bg[0] != bg[1]) ? utils.frgb(bgc, false) : ''}${(fg == undefined || fg[0] != fg[1]) ? utils.frgb(fgc, true) : ''}${s[i]}`;
         }
+
         this.s += utils.disableStyles(styles) + `\x1b[0m`;
     }
 
