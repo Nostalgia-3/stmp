@@ -2,6 +2,10 @@ import { Keypress, readKeypress } from "https://deno.land/x/keypress@0.0.11/mod.
 
 import * as path from "node:path";
 
+import {
+    Itui, color, Direction, SizeNode, ContentNode, ItuiStyle,
+    Padding, Size,
+} from './itui.ts';
 import { Player } from "./player.ts";
 import { Renderer } from "./renderer.ts";
 import * as utils from './utils.ts';
@@ -10,11 +14,27 @@ import { getFileID3, Tag } from "./id3.ts";
 const TEMP_PATH = `/home/nostalgia3/Music/`;
 // const TEMP_PATH = `D:/Music/mp3/`;
 
-import {
-    Itui, color, Direction, SizeNode, ContentNode, ItuiStyle,
-    padding_all, size_grow, size_static,
-    padding,
-} from './itui.ts';
+// const ipc = new DiscordIPC('1331978897146908723');
+
+// ipc.connect();
+
+// ipc.setActivity({
+//     details: '{title}', state: '{artists}', type: ActivityType.Listening,
+//     assets: {
+//         large_text: 'In {album}'
+//     }
+// });
+
+// const t = await getFileID3('D:/Music/mp3/[Official] Celeste Original Soundtrack - 18 - Reach for the Summit [iDVM9KED46Q].mp3');
+
+// const isrc = t?.extra.find((v)=>v.name=='TSRC');
+
+// if(isrc != undefined) {
+//     console.log(isrc.value as string);
+//     await fetch(`https://musicbrainz.org/ws/2/isrc/${isrc.value as string}?fmt=json`);
+// }
+
+// setInterval(()=>{});
 
 type Track = {
     tag?:       Tag,
@@ -41,28 +61,6 @@ export function printSizeTree(s: Record<string, unknown>, indent = 0) {
     }
 }
 
-// const ipc = new DiscordIPC('1331978897146908723');
-
-// ipc.connect();
-
-// ipc.setActivity({
-//     details: '{title}', state: '{artists}', type: ActivityType.Listening,
-//     assets: {
-//         large_text: 'In {album}'
-//     }
-// });
-
-// const t = await getFileID3('D:/Music/mp3/[Official] Celeste Original Soundtrack - 18 - Reach for the Summit [iDVM9KED46Q].mp3');
-
-// const isrc = t?.extra.find((v)=>v.name=='TSRC');
-
-// if(isrc != undefined) {
-//     console.log(isrc.value as string);
-//     await fetch(`https://musicbrainz.org/ws/2/isrc/${isrc.value as string}?fmt=json`);
-// }
-
-// setInterval(()=>{});
-
 const ui = new Itui();
 
 class App extends utils.TypedEventEmitter<{
@@ -79,10 +77,10 @@ class App extends utils.TypedEventEmitter<{
     protected rend: Renderer;
     protected size: { w: number, h: number };
     protected tracks: Track[];
-    protected queue: Track[];
     protected trackSel: number;
+    protected trackOff: number; // Used for rendering
+    protected queue: Track[];
     protected queueSel: number;
-    protected trackOff: number;
 
     protected dragX: number;
     protected dragY: number;
@@ -90,6 +88,8 @@ class App extends utils.TypedEventEmitter<{
     protected renderNow: boolean;
     protected activeTrack?: Track;
 
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
     protected player: Player;
     protected settings: SettingsManager;
 
@@ -117,12 +117,37 @@ class App extends utils.TypedEventEmitter<{
         // [[255, 95, 109], [255, 195, 113]]     // Sweet Morning
     };
 
+=======
+>>>>>>> Stashed changes
+=======
+>>>>>>> Stashed changes
     protected ui: ContentNode;
     protected nt: SizeNode;
 
     protected state: State;
-
     protected volume: number;
+
+    protected player: Player;
+
+    protected theme = {
+        playbar_char:       '━', // ━
+        playbar_fillchar:   '━', // █
+        playbar_color:      color(`#CCC`),
+        playbar_fillcolor:  color(`#FFF`),
+        playbar_thumbchar:  '*',
+
+        playing_song_fg:    color(`#CCF`),
+        selected_song_fg:   color(`#000`),
+        selected_song_bg:   color(`#FFF`),
+
+        primary_fg:         color(`#DFDFDF`),
+        secondary_fg:       color(`#1ED760`),
+        bg:                 color([97, 67, 133], [81, 99, 149]), // Kashmir
+        // bg: color(`#232526`, `#414345`),
+        // bg: color(`#283048`, `#859398`),
+        // [[238, 156, 167], [255, 221, 225]]    // Piglet
+        // [[255, 95, 109], [255, 195, 113]]     // Sweet Morning
+    };
 
     constructor() {
         super();
@@ -135,11 +160,17 @@ class App extends utils.TypedEventEmitter<{
         this.trackSel = 0;
         this.trackOff = 0;
 
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
         this.settings = new SettingsManager('.config.json', {
             music_path: ''
         });
 
         // this.player.getVolume()
+=======
+>>>>>>> Stashed changes
+=======
+>>>>>>> Stashed changes
         this.volume = 1;
 
         this.state = State.Normal;
@@ -180,23 +211,23 @@ class App extends utils.TypedEventEmitter<{
         const totalMinutes = (length - totalSeconds)/60;
 
         const playbar = ui.panel({
-            w: size_grow(),
-            h: size_static(3),
-            padding: padding(1, 0, 1, 0),
+            w: Size.grow(),
+            h: Size.static(3),
+            padding: Padding.all(1, 0, 1, 0),
             child_padding: 1,
         }, [
             ui.panel({
-                w: size_static(20),
-                h: size_static(1),
+                w: Size.static(20),
+                h: Size.static(1),
                 child_padding: 1
             }, [
-                ui.button({ bg: color('#FFF'), fg: color('#000'), w: size_static(4), h: size_static(1) }, `<<`, 'previous'),
-                ui.button({ bg: color('#FFF'), fg: color('#000'), w: size_static(4), h: size_static(1) }, `|>`, 'play-pause'),
-                ui.button({ bg: color('#FFF'), fg: color('#000'), w: size_static(4), h: size_static(1) }, `>>`, 'forwards'),
+                ui.button({ bg: color('#FFF'), fg: color('#000'), w: Size.static(4), h: Size.static(1) }, `<<`, 'previous'),
+                ui.button({ bg: color('#FFF'), fg: color('#000'), w: Size.static(4), h: Size.static(1) }, `|>`, 'play-pause'),
+                ui.button({ bg: color('#FFF'), fg: color('#000'), w: Size.static(4), h: Size.static(1) }, `>>`, 'forwards'),
                 ui.text({ fg: color('#FFF') }, `${Math.ceil(this.volume*100).toString().padStart(3)}%`)
             ], 'media-controls'),
             ui.text({ fg: color('#FFF') }, `${minutesPlayed}:${secondsPlayed.toString().padStart(2,'0')}`),
-            ui.hprogress({ fg: color('#FFF'), bg: color('#888'), w: size_grow(), h: size_static(1), thin: true }, Math.floor(this.player.getPosition()), Math.floor(this.player.getTotalLength()), 'play'),
+            ui.hprogress({ fg: color('#FFF'), bg: color('#888'), h: Size.static(1), thin: true }, Math.floor(this.player.getPosition()), Math.floor(this.player.getTotalLength()), 'play'),
             ui.text({ fg: color('#FFF') }, `${totalMinutes}:${totalSeconds.toString().padStart(2,'0')}`),
         ], 'playbar');
 
@@ -206,13 +237,13 @@ class App extends utils.TypedEventEmitter<{
         };
 
         const queue = ui.panel({
-            w: size_static(30),
+            w: Size.static(30),
             grow: 1,
             child_dir: Direction.Vertical,
             title: 'Queue'
         }, [
             ...this.queue.slice(this.queueSel-((this.queueSel==0)?0:1)).map((v,i)=>{
-                return ui.text({ ...trackStyle, fg: color('#FFF'), w: size_static(28) }, ((i==((this.queueSel==0)?0:1))?'> ':'  ') + (v.tag?.title ?? v.file));
+                return ui.text({ ...trackStyle, fg: color('#FFF'), w: Size.static(28) }, ((i==((this.queueSel==0)?0:1))?'> ':'  ') + (v.tag?.title ?? v.file));
             })
         ], 'queue');
 
@@ -220,9 +251,9 @@ class App extends utils.TypedEventEmitter<{
             case State.Lyrics: {
                 this.ui = ui.panel({
                     child_dir: Direction.Vertical, bg: this.theme.bg,
-                }, [ ui.panel({ title: 'Lyrics', padding: padding_all(1, true) }, [
+                }, [ ui.panel({ title: 'Lyrics', padding: Padding.same(1, true) }, [
                     ui.panel({ bg: color('#FFF'), grow: 1, child_dir: Direction.Vertical, centered: Direction.Horizontal }, [
-                        ui.panel({ bg: color('#323'), h: size_static(3), w: size_static(6) })
+                        ui.panel({ bg: color('#323'), h: Size.static(3), w: Size.static(6) })
                     ]),
                     ui.panel({ bg: color('#000'), grow: 3 }),
                 ]), playbar ])
@@ -279,24 +310,24 @@ class App extends utils.TypedEventEmitter<{
                                     // color('#FFF')
 
                                     return ui.panel(
-                                        { h: size_static(1), bg: (i==this.trackSel)?color('#FFF'):undefined, child_padding: 1 }, [
-                                            ui.text({ ...trackStyle, w: size_static(longestTrackTitle), fg }, v.tag?.title ?? v.file),
-                                            ui.text({ ...trackStyle, w: size_static(longestArtist), fg }, v.tag?.artists?.join(', ') ?? ''),
-                                            ui.text({ ...trackStyle, w: size_grow(), fg }, v.tag?.album ?? '')
+                                        { h: Size.static(1), bg: (i==this.trackSel)?color('#FFF'):undefined, child_padding: 1 }, [
+                                            ui.text({ ...trackStyle, w: Size.static(longestTrackTitle), fg }, v.tag?.title ?? v.file),
+                                            ui.text({ ...trackStyle, w: Size.static(longestArtist), fg }, v.tag?.artists?.join(', ') ?? ''),
+                                            ui.text({ ...trackStyle, w: Size.grow(), fg }, v.tag?.album ?? '')
                                         ], `track::file>${v.file}`
                                     )
                                 })
                             ], 'tracks'),
                         ]),
                         ui.panel({
-                            w: size_static(30),
+                            w: Size.static(30),
                             child_dir: Direction.Vertical
                         }, [
-                            ui.panel({ padding: padding(0, 0, 1, 1, false), title: 'Active', child_dir: Direction.Vertical, child_padding: 1, grow: 1, h: size_static(18) }, [
+                            ui.panel({ padding: Padding.all(0, 0, 1, 1, false), title: 'Active', child_dir: Direction.Vertical, child_padding: 1, grow: 1, h: Size.static(18) }, [
                                 ui.panel({
                                     centered: Direction.Horizontal,
-                                    w: size_static(26),
-                                    h: size_static(11),
+                                    w: Size.static(26),
+                                    h: Size.static(11),
                                     bg: color('#323232')
                                 }, undefined, 'ImageTodo'),
                                 ui.panel({
@@ -341,8 +372,6 @@ class App extends utils.TypedEventEmitter<{
             this.tracks.push({ file: entry.name, tag: tags });
             this.queue.push({ file: entry.name, tag: tags })
         }
-
-        // this.tracks.sort((a,b)=>(a.title??a.file).length-(b.title??b.file).length);
 
         utils.enableMouse();
         utils.setAltBuffer(true);
@@ -442,6 +471,10 @@ class App extends utils.TypedEventEmitter<{
         }
     }
 
+    /**
+     * Render a node tree based on the node
+     * @param n The root node in a node tree
+     */
     renderNode(n: SizeNode) {
         const commands = ui.draw(n);
         for(const command of commands) {
@@ -608,9 +641,7 @@ class App extends utils.TypedEventEmitter<{
     }
 
     playPreviousInQueue() {
-        // if (!this.queueSel) this.queueSel = this.trackSel;
-        //If this isn't a if else we will skip the first song if we loop around
-        if (this.queueSel == 0) {
+        if(this.queueSel == 0) {
             this.queueSel = this.queue.length-1;
         } else {
             this.queueSel--;
@@ -622,9 +653,7 @@ class App extends utils.TypedEventEmitter<{
     }
 
     playNextInQueue() {
-        // if (!this.queueSel) this.queueSel = this.trackSel;
-        //If this isn't a if else we will skip the first song if we loop around
-        if (this.queueSel >= this.queue.length-1) {
+        if(this.queueSel >= this.queue.length-1) {
             this.queueSel = 0;
         } else {
             this.queueSel++;
@@ -638,6 +667,7 @@ class App extends utils.TypedEventEmitter<{
     selectWithOffset(x: number) {
         if(this.tracks[this.trackOff + x]) {
             if(this.trackSel == this.trackOff + x) {
+                // Implement a double-click instead of this
                 this.playSelectedTrack();
             } else {
                 this.trackSel = this.trackOff + x;
