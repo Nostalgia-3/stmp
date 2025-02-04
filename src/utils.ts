@@ -187,7 +187,9 @@ export function blend(c1: RGB, c2: RGB) {
 }
 
 export function write(s: string) {
-    writeAllSync(Deno.stdout, new TextEncoder().encode(s));
+    // console.log(s.length);
+    // if(s.length > 5000) return;
+    writeAllSync(Deno.stderr, new TextEncoder().encode(s));
 }
 
 export function frgb(rgb: RGB, foreground: boolean) {

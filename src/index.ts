@@ -7,8 +7,8 @@ import { Renderer } from "./renderer.ts";
 import * as utils from './utils.ts';
 import { getFileID3, Tag } from "./id3.ts";
 
-// const TEMP_PATH = `/home/nostalgia3/Music/`;
-const TEMP_PATH = `D:/Music/mp3/`;
+ const TEMP_PATH = `/home/nostalgia3/Music/`;
+//const TEMP_PATH = `D:/Music/mp3/`;
 
 import {
     Itui, color, Direction, SizeNode, ContentNode, ItuiStyle,
@@ -484,6 +484,14 @@ class App extends utils.TypedEventEmitter<{
         this.renderNode(playbar);
     }
 
+    drawTracks() {
+        this.updateUI();
+        this.nt = ui.layout(this.size.w, this.size.h, 0, 0, this.ui);
+        const tracks = ui.getElementById(this.nt, 'tracks');
+        if(!tracks) return;
+        this.renderNode(tracks);
+    }
+
     handleClick(x: number, y: number) {
         const el = ui.click(this.nt, x, y);
         if(!el) return;
@@ -520,7 +528,7 @@ class App extends utils.TypedEventEmitter<{
         if(ui.inRange(tracks, x, y)) {
             if(count > 0) app.scrollDown(5);
             else app.scrollUp(5);
-            app.render();
+            this.render();
         }
     }
 
@@ -529,11 +537,12 @@ class App extends utils.TypedEventEmitter<{
             // utils.bell();
         } else if((this.trackSel-this.trackOff) > 0) {
             this.trackSel--;
-            this.render();
+            // this.render();
+            this.drawTracks();
         } else {
             this.trackSel--;
             this.trackOff--;
-            this.render();
+            this.drawTracks();
         }
     }
 
@@ -542,10 +551,10 @@ class App extends utils.TypedEventEmitter<{
             // utils.bell();
         } else if((this.trackSel-this.trackOff) < (ui.getElementById(this.nt, 'tracks')?.h ?? 1)-1) {
             this.trackSel++;
-            this.render();
+            this.drawTracks();
         } else {
             this.trackOff++; this.trackSel++;
-            this.render();
+            this.drawTracks();
         }
     }
 
