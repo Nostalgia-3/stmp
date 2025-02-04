@@ -88,46 +88,14 @@ class App extends utils.TypedEventEmitter<{
     protected renderNow: boolean;
     protected activeTrack?: Track;
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
     protected player: Player;
     protected settings: SettingsManager;
 
-    protected theme = {
-        // const fillCharacter = '━';
-        // const fillCharacter = '█';
-        playbar_char:       '━',
-        playbar_fillchar:   '━',
-        playbar_color:      utils.grad([192,192,192]),
-        playbar_fillcolor:  utils.grad([255,255,255]),
-        playbar_thumbchar:  '*',
-
-        playing_song_fg:    utils.grad([192, 192, 255]),
-        selected_song_fg:   utils.grad([0, 0, 0]),
-        selected_song_bg:   utils.grad([255,255,255]),
-
-        // primary_fg:         utils.grad([255, 255, 255]),
-        // secondary_fg:       utils.grad([192, 192, 192]),
-        primary_fg: utils.grad(utils.parseHexColor(`#DFDFDF`)),
-        secondary_fg: utils.grad(utils.parseHexColor(`#1ED760`)),
-        // bg: color(`#232526`, `#414345`),
-        bg: color([97, 67, 133], [81, 99, 149]), // Kashmir
-        // bg: color(`#283048`, `#859398`),
-        // [[238, 156, 167], [255, 221, 225]]    // Piglet
-        // [[255, 95, 109], [255, 195, 113]]     // Sweet Morning
-    };
-
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
     protected ui: ContentNode;
     protected nt: SizeNode;
 
     protected state: State;
     protected volume: number;
-
-    protected player: Player;
 
     protected theme = {
         playbar_char:       '━', // ━
@@ -142,11 +110,11 @@ class App extends utils.TypedEventEmitter<{
 
         primary_fg:         color(`#DFDFDF`),
         secondary_fg:       color(`#1ED760`),
-        bg:                 color([97, 67, 133], [81, 99, 149]), // Kashmir
-        // bg: color(`#232526`, `#414345`),
+        // bg: color([97, 67, 133], [81, 99, 149]), // Kashmir
+        bg: color(`#232526`, `#414345`), // Grey thing
         // bg: color(`#283048`, `#859398`),
-        // [[238, 156, 167], [255, 221, 225]]    // Piglet
-        // [[255, 95, 109], [255, 195, 113]]     // Sweet Morning
+        // bg: color([238, 156, 167], [255, 221, 225])    // Piglet
+        // bg: color([255, 95, 109], [255, 195, 113])     // Sweet Morning
     };
 
     constructor() {
@@ -160,17 +128,14 @@ class App extends utils.TypedEventEmitter<{
         this.trackSel = 0;
         this.trackOff = 0;
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
         this.settings = new SettingsManager('.config.json', {
-            music_path: ''
+            music_path: '',
+            transparency: false
         });
 
+        this.settings.setBool('transparency', true);
+
         // this.player.getVolume()
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
         this.volume = 1;
 
         this.state = State.Normal;
@@ -199,6 +164,8 @@ class App extends utils.TypedEventEmitter<{
         this.updateUI();
 
         this.nt = ui.layout(this.size.w, this.size.h, 0, 0, this.ui);
+
+        // this.rend.setTransparency(true);
     }
 
     updateUI() {
@@ -296,6 +263,17 @@ class App extends utils.TypedEventEmitter<{
                     bg: this.theme.bg
                 }, [
                     ui.panel({}, [
+                        // Future modals?!?!
+                        // ui.panel({
+                        //     position: [Size.percentage(50), Size.percentage(50)],
+                        //     bg: color('#FF0000'),
+                        //     w: Size.static(30),
+                        //     h: Size.static(15),
+                        //     z: 1,
+                        //     child_dir: Direction.Vertical
+                        // }, [
+                        //     ui.text({ bg: color('#444') }, 'Hello')
+                        // ]),
                         ui.panel({
                             child_dir: Direction.Horizontal,
                             title: 'Tracks'
@@ -304,13 +282,10 @@ class App extends utils.TypedEventEmitter<{
                                 child_dir: Direction.Vertical
                             }, this.trackOff, [
                                 ...this.tracks.map((v,i)=>{
-                                    const fg = (i==this.trackSel)?color('#000'):color('#FFF');
-                                    // const fg = color('#FFF');
-
-                                    // color('#FFF')
+                                    const fg = (i==this.trackSel)? this.theme.selected_song_fg : this.theme.primary_fg;
 
                                     return ui.panel(
-                                        { h: Size.static(1), bg: (i==this.trackSel)?color('#FFF'):undefined, child_padding: 1 }, [
+                                        { h: Size.static(1), bg: (i==this.trackSel)?this.theme.selected_song_bg:undefined, child_padding: 1 }, [
                                             ui.text({ ...trackStyle, w: Size.static(longestTrackTitle), fg }, v.tag?.title ?? v.file),
                                             ui.text({ ...trackStyle, w: Size.static(longestArtist), fg }, v.tag?.artists?.join(', ') ?? ''),
                                             ui.text({ ...trackStyle, w: Size.grow(), fg }, v.tag?.album ?? '')
@@ -334,10 +309,10 @@ class App extends utils.TypedEventEmitter<{
                                     child_dir: Direction.Vertical
                                 }, [
                                     ui.text({
-                                        fg: color(`#ffffff`),
+                                        fg: this.theme.primary_fg,
                                     }, this.activeTrack ? (this.activeTrack.tag?.title ?? this.activeTrack.file) : `Title`, 'title'),
                                     ui.text({
-                                        fg: color(`#808080`),
+                                        fg: this.theme.secondary_fg,
                                     }, this.activeTrack ? (this.activeTrack.tag?.artists?.join(', ') ?? '') : `Artists`, 'artist')
                                 ], 'playing-now'),
                             ]),
@@ -476,7 +451,7 @@ class App extends utils.TypedEventEmitter<{
      * @param n The root node in a node tree
      */
     renderNode(n: SizeNode) {
-        const commands = ui.draw(n);
+        const commands = ui.draw(n).sort((a,b)=>(a.z-b.z));
         for(const command of commands) {
             try {
                 switch(command.type) {
@@ -484,7 +459,7 @@ class App extends utils.TypedEventEmitter<{
                         const comm = command;
                         this.rend.text(comm.x, comm.y, comm.text, comm.fg, comm.bg);
                     break; }
-                        
+
                     case 'rect': {
                         const comm = command;
                         if(comm.title)
@@ -514,7 +489,6 @@ class App extends utils.TypedEventEmitter<{
 
         this.updateUI();
         this.nt = ui.layout(w, h, 0, 0, this.ui);
-        // utils.write('\x1b[2J');
         this.renderNode(this.nt);
     }
 
@@ -527,15 +501,18 @@ class App extends utils.TypedEventEmitter<{
     }
 
     drawTracks() {
-        // this.render();
         this.updateUI();
         this.nt = ui.layout(this.size.w, this.size.h, 0, 0, this.ui);
         const tracks = ui.getElementById(this.nt, 'tracks');
         if(!tracks) return;
-        tracks.style.bg = [
-            utils.interpolate(this.theme.bg[0], this.theme.bg[1], tracks.y/this.size.h),
-            utils.interpolate(this.theme.bg[0], this.theme.bg[1], tracks.h/this.size.h)
-        ];
+        if(!this.settings.getBool('transparent')) {
+            tracks.style.bg = [
+                utils.interpolate(this.theme.bg[0], this.theme.bg[1], tracks.y/this.size.h),
+                utils.interpolate(this.theme.bg[0], this.theme.bg[1], tracks.h/this.size.h)
+            ];
+        } else {
+            tracks.style.bg = color('#000');
+        }
         this.renderNode(tracks);
     }
 
@@ -575,7 +552,7 @@ class App extends utils.TypedEventEmitter<{
         if(ui.inRange(tracks, x, y)) {
             if(count > 0) app.scrollDown(5);
             else app.scrollUp(5);
-            this.render();
+            this.drawTracks();
         }
     }
 

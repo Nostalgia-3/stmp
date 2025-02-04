@@ -1,3 +1,4 @@
+import { color } from "./itui.ts";
 import * as utils from "./utils.ts";
 import { TextStyles } from "./utils.ts";
 
@@ -7,11 +8,18 @@ export class Renderer {
     protected width: number;
     protected height: number;
 
+    protected transparency: boolean;
+    protected lastBG: utils.RGB;
+    protected lastFG: utils.RGB;
+
     constructor(width: number, height: number) {
         this.s = '';
         this.c = [];
         this.width = width;
         this.height = height;
+        this.transparency = false;
+        this.lastFG = [0, 0, 0];
+        this.lastBG = [0, 0, 0];
         for(let i=0;i<width*height;i++) {
             this.c[i] = [[0,0,0],[0,0,0]];
         }
@@ -28,6 +36,33 @@ export class Renderer {
             const { columns, rows } = Deno.consoleSize();
             console.error(`setBG(${x}, ${y}) FAILED @ point ${x+y*this.width} [${this.c[x+y*this.width]}] (col=${columns-1}, rows=${rows})`);
             throw e;
+        }
+    }
+
+    writeFG(x: number, y: number, c?: utils.RGB) {
+        if(!c) {
+            if(this.getFG(x, y).join('') != this.lastFG.join('')) {
+                this.s += utils.frgb(this.getFG(x, y), true);
+                this.lastFG = this.getFG(x, y);
+            }
+        } else if(c.join('') != this.lastFG.join('')) {
+            this.s += utils.frgb(c, true);
+            this.lastFG = c;
+        }
+    }
+
+    writeBG(x: number, y: number, c?: utils.RGB) {
+        if(!c) {
+            if(this.getBG(x, y).join('') != this.lastBG.join('')) {
+                this.s += utils.frgb(this.getBG(x, y), false);
+                this.lastBG = this.getBG(x, y);
+            }
+        } else if(this.transparency && c.join('') == '000' && c.join('') != this.lastBG.join('')) {
+            this.s += `\x1b[0m`;
+            this.lastBG = [0,0,0];
+        } else if(c.join('') != this.lastBG.join('')) {
+            this.s += utils.frgb(c, false);
+            this.lastBG = c;
         }
     }
 
@@ -49,7 +84,6 @@ export class Renderer {
         for(let i=0;i<h;i++) {
             this.s += `${utils.cursorTo(x, y+i)}${utils.frgb(this.getBG(x, y+i), false)}${''.padStart(w, ' ')}`;
         }
-        this.s += `\x1b[0m`;
     }
 
     clear(bg: utils.Gradient) {
@@ -59,29 +93,22 @@ export class Renderer {
                 this.setBG(j, i, col);
             this.s += `${utils.cursorTo(0, i)}${utils.frgb(col, false)}${''.padStart(this.width, ' ')}`;
         }
-        this.s += `\x1b[0m`;
     }
 
     text(x: number, y: number, s: string, fg?: utils.Gradient, bg?: utils.Gradient, styles: Partial<TextStyles> = {}) {
         this.s += utils.cursorTo(x,y) + utils.enableStyles(styles);
-        if(fg && fg[0] == fg[1]) this.s += `${utils.frgb(fg[0], true)}`;
-        if(bg && bg[0] == bg[1]) this.s += `${utils.frgb(bg[0], false)}`;
 
-        let lastFG;
-        let lastBG;
         for(let i=0;i<s.length;i++) {
-            const fgc = fg ? utils.interpolate(fg[0], fg[1], i/s.length) : this.getFG(x+i, y);
-            const bgc = bg ? utils.interpolate(bg[0], bg[1], i/s.length) : this.getBG(x+i, y);
-            if(fg) this.setFG(x + i, y, fgc);
-            if(bg) this.setBG(x + i, y, bgc);
-            const bgtext = (lastBG?.join('') != bgc.join('')) && (bgc.join('') != '000' && (bg == undefined || bg[0] != bg[1])) ? utils.frgb(bgc, false) : '';
-            const fgtext = (lastFG?.join('') != fgc.join('')) && (fg == undefined || fg[0] != fg[1]) ? utils.frgb(fgc, true) : '';
-            this.s += `${bgtext}${fgtext}${s[i]}`;
-            lastFG = fgc;
-            lastBG = bgc;
+            const fgc = fg ? utils.interpolate(fg[0], fg[1], i/s.length) : this.getFG(x+i,y); // undefined
+            const bgc = bg ? utils.interpolate(bg[0], bg[1], i/s.length) : this.getBG(x+i,y); // undefined
+            if(fgc) this.setFG(x + i, y, fgc);
+            if(bgc) this.setBG(x + i, y, bgc);
+            this.writeBG(x + i, y, bgc);
+            this.writeFG(x + i, y, fgc);
+            this.s += `${s[i]}`;
         }
 
-        this.s += utils.disableStyles(styles) + `\x1b[0m`;
+        this.s += utils.disableStyles(styles);
     }
 
     vline(x: number, y: number, h: number, fg: utils.Gradient, bg?: utils.Gradient, ch: string = '│') {
@@ -90,15 +117,18 @@ export class Renderer {
         
         for(let i=0;i<h;i++) {
             const fgc = utils.interpolate(fg[0], fg[1], i/h);
-            const bgc = bg ? utils.interpolate(bg[0], bg[1], i/h) : this.getBG(x, y+i);
+            const bgc = bg ? utils.interpolate(bg[0], bg[1], i/h) : undefined;
             this.setFG(x, y+i, fgc);
-            if(bg) this.setBG(x, y+i, bgc);
-            this.s += `${utils.cursorTo(x,y+i)}${(fg == undefined || fg[0] != fg[1]) ? utils.frgb(fgc, true) : ''}${(bgc.join('') != '000' && (bg == undefined || bg[0] != bg[1])) ? utils.frgb(bgc, false) : ''}${ch}`;
+            if(bgc) this.setBG(x, y+i, bgc);
+            this.writeBG(x, y+i, bgc);
+            this.writeFG(x, y+i, fgc);
+            this.s += `${utils.cursorTo(x,y+i)}${ch}`;
         }
-        this.s += `\x1b[0m`;
     }
 
     hline(x: number, y: number, w: number, fg: utils.Gradient, bg?: utils.Gradient, ch = '─') {
+        if(isNaN(w)) return;
+
         this.s += utils.cursorTo(x,y);
         if(fg && fg[0] == fg[1]) this.s += `${utils.frgb(fg[0], true)}`;
         if(bg && bg[0] == bg[1]) this.s += `${utils.frgb(bg[0], false)}`;
@@ -108,20 +138,22 @@ export class Renderer {
             const bgc = bg ? utils.interpolate(bg[0], bg[1], i/w) : this.getBG(x, y+i);
             this.setFG(x+i, y, fgc);
             if(bg) this.setBG(x+i, y, bgc);
-            this.s += `${(fg == undefined || fg[0] != fg[1]) ? utils.frgb(fgc, true) : ''}${(bgc.join('') != '000' && (bg == undefined || bg[0] != bg[1])) ? utils.frgb(bgc, false) : ''}${ch}`;
+            this.writeFG(x+i, y, fgc);
+            this.s += `${ch}`;
         }
-        this.s += `\x1b[0m`;
     }
 
     rect(x: number, y: number, w: number, h: number, bg?: utils.Gradient) {
+        if(w >= this.width && h >= this.height) this.clear(bg ?? color('#000'));
         if(!bg) {
-            // this.s += `\x1b[0m`;
-            // for(let i=0;i<h;i++) {
-            //     for(let j=0;j<w;j++)
-            //         this.setBG(x+j, y+i, [0,0,0]);
-            //     this.s += `${utils.cursorTo(x,y+i)}${''.padStart(w)}`;
-            //     // ${''.padStart((w-w%8)/8, '\t')}
-            // }
+            if(!this.transparency) return;
+
+            for(let i=0;i<h;i++) {
+                for(let j=0;j<w;j++)
+                    this.setBG(x+j, y+i, [0,0,0]);
+                this.s += `${utils.cursorTo(x,y+i)}${''.padStart(w)}`;
+            }
+
             return;
         }
 
@@ -130,17 +162,16 @@ export class Renderer {
             const col = utils.interpolate(bg[0], bg[1], i/h);
             for(let j=0;j<w;j++)
                 this.setBG(x+j, y+i, col);
-            // ${''.padStart(w)}
-            this.s += `${utils.cursorTo(x,y+i)}${(bg[0] != bg[1]) ? utils.frgb(col, false) : ''}${''.padStart(w)}`;
+            this.writeBG(x, y+i, col);
+            this.s += `${utils.cursorTo(x,y+i)}${''.padStart(w)}`;
         }
-        this.s += `\x1b[0m`;
     }
 
     box(x: number, y: number, w: number, h: number, text: string, fg: utils.Gradient, bg?: utils.Gradient) {
         if(bg) this.rect(x, y, w, h, bg);
         this.text(x, y, (`╭─ ${text} `.padEnd(w-1, '─') + `╮`), fg);
-        this.vline(x, y+1, h-2, utils.grad(fg[0]));
-        this.vline(x+w-1, y+1, h-2, utils.grad(fg[1]));
+        this.vline(x, y+1, h-2, [fg[0], fg[0]]);
+        this.vline(x+w-1, y+1, h-2, [fg[1], fg[1]]);
         this.text(x, y+h-1, `╰${''.padEnd(w-2, '─')}╯`, fg);
     }
 
@@ -167,5 +198,9 @@ export class Renderer {
 
     flush() {
         this.s = '';
+    }
+
+    setTransparency(b: boolean) {
+        this.transparency = b;
     }
 }

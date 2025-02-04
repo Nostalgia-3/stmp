@@ -1,13 +1,37 @@
-interface IRSCRecording {
+export type IRSCRelease = {
     title: string,
     video: boolean,
     disambiguation: string,
     "first-release-date": string,
     id: string,
     length: number
+};
+
+export type Artist = {
+    name: string,
+    artist: Record<string, unknown>
 }
 
-export interface ImageObject {
+export type ISRCRecording = {
+    id: string,
+    score: number,
+    title: string,
+    length: number,
+    video?: null,
+    "artist-credit": Artist[],
+    "first-release-date": string,
+    releases: IRSCRelease[]
+}
+
+export type ISRCFindResponse = {
+    created: string,
+    count: number,
+    offset: number,
+    recordings: ISRCRecording[],
+    error?: string
+};
+
+export type ImageObject = {
     types: string[],
     front: boolean,
     back: boolean,
@@ -17,59 +41,61 @@ export interface ImageObject {
     approved: boolean,
     id: string,
     thumbnails: {
-      large: string,
-      small: string
+        large: string,
+        small: string
     }
-  }
+}
 
-export class MusicBrainZ {
-    private reportedVersion: string
-    private  contactInfo: string;
-    private  appName: string;
-    ua: string;
-    constructor(reportedVersion: string, appName: string, contactInfo: string){
-        this.reportedVersion = reportedVersion;
-        this.contactInfo = contactInfo;
-        this.appName = appName;
-        this.ua = `${this.appName}/${this.reportedVersion} (${this.contactInfo})`
+export class MusicBrainz {
+    protected userAgent: string;
+
+    /**
+     * @param userAgent The recommend user agent is `App name/App version (Contact info)`
+     */
+    constructor(userAgent: string) {
+        this.userAgent = userAgent;
     }
 
-    async getMbIdsFromISRC(isrc: string){
-        const result = await (await fetch(`https://musicbrainz.org/ws/2/recording/?query=isrc:${isrc}&fmt=json`,{
+    async getMbIdsFromISRC(isrc: string) {
+        const result = await (
+            await fetch(`https://musicbrainz.org/ws/2/recording/?query=isrc:${isrc}&fmt=json`, {
             headers: {
-                'User-Agent': this.ua
+                'User-Agent': this.userAgent
             }
-        })).json();
-        if(result.length == 0 || result.length > 25) return {result: [], error: 'Correct track coulden\'t be found.'}
-        if(result.error) return {result: [],error: result.error}
-        const ids = [];
-        for (const recording of result.recordings){
-            for(const release of recording.releases){
-                ids.push(release.id)
+        })).json() as ISRCFindResponse;
+
+        if(result.recordings.length == 0 || result.recordings.length > 25)
+            return { result: [], error: `A track with the ISRC "${isrc}" couldn't be found.` };
+
+        if(result.error) return { result: [], error: result.error };
+        
+        const ids: string[] = [];
+        for (const recording of result.recordings) {
+            for (const release of recording.releases) {
+                ids.push(release.id);
             }
         }
-        console.log()
-        return {result: ids,error: undefined}
+
+        return { result: ids };
     }
 
-    async getThumbnailFromMbId(MbId: string): Promise<{result: undefined | {images:ImageObject[]},error: undefined | string}>{
-        const rawResult = await (await fetch(`https://coverartarchive.org/release/${MbId}`,{
+    async getThumbnailFromMbId(mbId: string): Promise<{ result?: ImageObject[], error?: string }> {
+        const rawResult = (await fetch(`https://coverartarchive.org/release/${mbId}`, {
             headers: {
-                'User-Agent': this.ua
+                'User-Agent': this.userAgent
             }
         }));
-        const code = rawResult.status
-        switch (code) {
-            case 200: {
-                return {result: await rawResult.json(), error: undefined};
-            }
-            case 400: { return {result: undefined, error: `${MbId} cannot be parsed as a valid UUID.`}; }
-            case 404: { return {result: undefined, error: `There is no release with this MBID.`}; }
-            case 406: { return {result: undefined, error: `The server is unable to generate a response suitable to the Accept header.`}; }
-            case 503: { return {result: undefined, error: `The user has exceeded their rate limit.`}; }
-            default: {return {result: undefined, error: `No Vaild Response Code`}}
+
+        switch (rawResult.status) {
+            case 200: return { result: (await rawResult.json()).images };
+            case 400: return { error: `${mbId} cannot be parsed as a valid UUID.` };
+            case 404: return { error: `There is no release with this MBID.` };
+            case 406: return { error: `The server is unable to generate a response suitable to the Accept header.` };
+            case 503: return { error: `The user has exceeded their rate limit.` };
+            default:  return { error: `No Vaild Response Code` }
         }
     }
 
-
+    setUserAgent(s: string) { this.userAgent = s; }
+    getUserAgent() { return this.userAgent; }
 }

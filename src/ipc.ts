@@ -1,5 +1,3 @@
-import { getFileID3 } from "./id3.ts";
-
 // This is an incomplete list
 type PayloadCommand = 'DISPATCH' | 'AUTHORIZE' | 'AUTHENTICATE' | 'SET_ACTIVITY';
 
@@ -179,15 +177,3 @@ export class DiscordIPC {
         return true;
     }
 }
-
-// const buf = new Uint8Array(2048);
-// d.readSync(buf);
-
-// const dispatch = JSON.parse(parsePacket(buf).data) as Payload;
-
-// if(dispatch.cmd != 'DISPATCH') {
-//     d.close();
-//     console.log(`First packet wasn't a dispatch?`);
-// }
-
-// d.close();

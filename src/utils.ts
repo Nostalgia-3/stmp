@@ -72,7 +72,7 @@ export class FancyBuffer {
 }
 
 export type RGB = [number, number, number];
-export type Gradient = [RGB, RGB];
+export type Gradient = [RGB, RGB, boolean?];
 
 export type TextStyles = {
     bold: boolean,
@@ -183,8 +183,6 @@ export function interpolate(c1: RGB, c2: RGB, f: number): RGB {
 }
 
 export function write(s: string) {
-    // console.log(s.length);
-    // if(s.length > 5000) return;
     writeAllSync(Deno.stderr, new TextEncoder().encode(s));
 }
 

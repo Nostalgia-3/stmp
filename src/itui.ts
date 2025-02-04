@@ -1,4 +1,4 @@
-import { interpolate, parseHexColor } from "./utils.ts";
+import { parseHexColor } from "./utils.ts";
 
 export type Color       = [number, number, number];
 export type Gradient    = [Color, Color];
@@ -116,7 +116,19 @@ export type ItuiStyle = {
      * Look at something like the flex-grow in CSS to better
      * understand what this does
      */
-    grow: number
+    grow: number,
+
+    /**
+     * If specified, the location chosen will be the middle point
+     * for a floating node tree
+     */
+    position: [Size, Size],
+
+    /**
+     * The 3rd coordinate determining the position from the back to the front
+     * (higher means more forward)
+     */
+    z: number
 };
 
 /**
@@ -143,10 +155,10 @@ export type SizeNode = {
  * Render commands created by the `Itui.prototype.draw()` function
  */
 export type RenderCommand
-    = { _id: string, type: 'rect', x: number, y: number, w: number, h: number, title?: string, bg?: Gradient }
-    | { _id: string, type: 'text', x: number, y: number, text: string, fg?: Gradient, bg?: Gradient }
-    | { _id: string, type: 'image', x: number, y: number, w: number, h: number, pixels: number[] }
-    | { _id: string, type: 'vline', x: number, y: number, w: number, h: number, fg?: Gradient, bg?: Gradient }
+    = { _id: string, z: number, type: 'rect', x: number, y: number, w: number, h: number, title?: string, bg?: Gradient }
+    | { _id: string, z: number, type: 'text', x: number, y: number, text: string, fg?: Gradient, bg?: Gradient }
+    | { _id: string, z: number, type: 'image', x: number, y: number, w: number, h: number, pixels: number[] }
+    | { _id: string, z: number, type: 'vline', x: number, y: number, w: number, h: number, fg?: Gradient, bg?: Gradient }
 ;
 
 export class Itui {
@@ -166,7 +178,7 @@ export class Itui {
      * Parse a node tree, returning a node tree with data included
      * @returns 
      */
-    layout(w: number, h: number, x: number, y: number, node: ContentNode, pbg?: Gradient): SizeNode {
+    layout(w: number, h: number, x: number, y: number, node: ContentNode): SizeNode {
         let sNode: SizeNode;
 
         if(node.style.title) {
@@ -179,10 +191,16 @@ export class Itui {
 
         const dir = node.style.child_dir ?? Direction.Horizontal;
 
-        const cW = (node.style.w?.type == 'percentage') ? { v: w } : this.parseSize(node.style.w, w);
-        const cH = (node.style.h?.type == 'percentage') ? { v: h } : this.parseSize(node.style.h, h);
+        const cW = this.parseSize(node.style.w, w); // (node.style.w?.type == 'percentage') ? { v: w }
+        const cH = this.parseSize(node.style.h, h); // (node.style.h?.type == 'percentage') ? { v: h }
         let cX = x;
         let cY = y;
+
+        if(node.style.position) {
+            // floating window; ignore all the rules and put wherever we want!!!
+            cX = Math.floor((this.parseSize(node.style.position[0], w).v+cW.v)/2);
+            cY = Math.floor((this.parseSize(node.style.position[1], h).v)/2);
+        }
 
         switch(node.type) {
             case 'panel':
@@ -209,11 +227,13 @@ export class Itui {
         const total_space = (dir == Direction.Horizontal) ? cW.v : cH.v;
         const paddingUsed = (dir == Direction.Horizontal) ? (node.style.padding?.left??0) : (node.style.padding?.top??0);
 
-        let free_space = total_space-paddingUsed-(node.style.child_padding??0)*node.children.length;
+        let free_space = total_space-paddingUsed-(node.style.child_padding??0)*(node.children.filter((v)=>!v.style.position).length);
         let used_space = 0;
         let grow_node_count = 0;
 
         for(let i=0;i<node.children.length;i++) {
+            if(node.children[i].style.position) continue;
+
             const s = (dir == Direction.Horizontal)
                 ? this.parseSize(node.children[i].style.w, cW.v)
                 : this.parseSize(node.children[i].style.h, cH.v)
@@ -253,24 +273,36 @@ export class Itui {
                 }
             }
 
+            let width: number;
+            let height: number;
+
             if(dir == Direction.Horizontal) {
+                width = (size+cX > w) ? (w - (size+cX)) : size;
+                height = cH.v;
+            } else {
+                width = cW.v;
+                height = size;
+            }
+
+            if(node.children[i].style.position) {
+                width = w;
+                height = h;
+            }
+
+            if(dir == Direction.Horizontal || (dir == Direction.Vertical && (i-sPercentage) < cH.v)) {
                 sNode.children.push(this.layout(
-                    (size+cX > w) ? (w - (size+cX)) : size, cH.v,
+                    width, height,
                     cX, cY,
                     node.children[i]
                 ));
-                cX += size;
-                cX += node.style.child_padding ?? 0;
-            } else {
-                if((i-sPercentage) < cH.v) {
-                    sNode.children.push(this.layout(
-                        cW.v, size,
-                        cX, cY,
-                        node.children[i]
-                    ));
+            }
+
+            if(!node.children[i].style.position) {
+                if(dir == Direction.Horizontal) {
+                    cX += size + (node.style.child_padding ?? 0);
+                } else {
+                    cY += size + (node.style.child_padding ?? 0);
                 }
-                cY += size;
-                cY += node.style.child_padding ?? 0;
             }
         }
 
@@ -313,22 +345,22 @@ export class Itui {
         switch(node.type) {
             case 'scrollPanel':
             case 'panel':
-                renderCommands.push({ _id: node.id ?? '?', type: 'rect', x: node.x, y: node.y, w: node.w, h: node.h, title: node.style.title, bg: node.style.bg });
+                renderCommands.push({ _id: node.id ?? '?', z: node.style.z ?? 0, type: 'rect', x: node.x, y: node.y, w: node.w, h: node.h, title: node.style.title, bg: node.style.bg });
             break;
 
             case 'text':
-                renderCommands.push({ _id: node.id ?? '?', type: 'text', x: node.x, y: node.y, text: `${(node.content as string).slice(0, node.w)}`, fg: node.style.fg });
+                renderCommands.push({ _id: node.id ?? '?', z: node.style.z ?? 0, type: 'text', x: node.x, y: node.y, text: `${(node.content as string).slice(0, node.w)}`, fg: node.style.fg });
             break;
 
             case 'hprogress': {
                 const [done, total] = node.content as [number, number];
 
                 if(node.style.thin) {
-                    renderCommands.push({ _id: node.id ?? '?', type: 'vline', x: node.x, y: node.y, w: node.w, h: node.h, fg: node.style.bg });
-                    renderCommands.push({ _id: node.id ?? '?', type: 'vline', x: node.x, y: node.y, w: Math.floor(node.w*(done/(total??1))), h: node.h, fg: node.style.fg });
+                    renderCommands.push({ _id: node.id ?? '?', z: node.style.z ?? 0, type: 'vline', x: node.x, y: node.y, w: node.w, h: node.h, fg: node.style.bg });
+                    renderCommands.push({ _id: node.id ?? '?', z: node.style.z ?? 0, type: 'vline', x: node.x, y: node.y, w: Math.floor(node.w*(done/(total??1))), h: node.h, fg: node.style.fg });
                 } else {
-                    renderCommands.push({ _id: node.id ?? '?', type: 'rect', x: node.x, y: node.y, w: node.w, h: node.h, bg: node.style.bg });
-                    renderCommands.push({ _id: node.id ?? '?', type: 'rect', x: node.x, y: node.y, w: Math.floor(node.w*(done/(total??1))), h: node.h, bg: node.style.fg });
+                    renderCommands.push({ _id: node.id ?? '?', z: node.style.z ?? 0, type: 'rect', x: node.x, y: node.y, w: node.w, h: node.h, bg: node.style.bg });
+                    renderCommands.push({ _id: node.id ?? '?', z: node.style.z ?? 0, type: 'rect', x: node.x, y: node.y, w: Math.floor(node.w*(done/(total??1))), h: node.h, bg: node.style.fg });
                 }
             break; }
 
@@ -348,9 +380,9 @@ export class Itui {
             break; }
 
             case 'button': {
-                renderCommands.push({ _id: node.id ?? '?', type: 'rect', x: node.x+1, y: node.y, w: node.w-2, h: node.h, bg: node.style.bg });
-                renderCommands.push({ _id: node.id ?? '?', type: 'text', x: node.x, y: node.y, text: `\ue0b6${''.padStart((node.content as string).length)}\ue0b4`, fg: node.style.bg });
-                renderCommands.push({ _id: node.id ?? '?', type: 'text', x: node.x+1, y: node.y, text: `${node.content as string}`, fg: node.style.fg });
+                renderCommands.push({ _id: node.id ?? '?', z: node.style.z ?? 0, type: 'rect', x: node.x+1, y: node.y, w: node.w-2, h: node.h, bg: node.style.bg });
+                renderCommands.push({ _id: node.id ?? '?', z: node.style.z ?? 0, type: 'text', x: node.x, y: node.y, text: `\ue0b6${''.padStart((node.content as string).length)}\ue0b4`, fg: node.style.bg });
+                renderCommands.push({ _id: node.id ?? '?', z: node.style.z ?? 0, type: 'text', x: node.x+1, y: node.y, text: `${node.content as string}`, fg: node.style.fg });
             break; }
         }
 
@@ -387,7 +419,6 @@ export class Itui {
     click(nt: SizeNode, x: number, y: number) {
         return this.i_click(nt, x, y).at(-1);
     }
-
 
     /* Elements */
 
