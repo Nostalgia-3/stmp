@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 
 // TODO: everything
 export class SettingsManager {
-    protected c: Record<string, unknown>;
+    c: Record<string, unknown>;
     protected settingsFile: string;
 
     protected isType(tag: string, t: "string" | "number" | "bigint" | "boolean" | "symbol" | "undefined" | "object" | "function") {

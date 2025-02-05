@@ -11,8 +11,8 @@ import { Renderer } from "./renderer.ts";
 import * as utils from './utils.ts';
 import { getFileID3, Tag } from "./id3.ts";
 
-const TEMP_PATH = `/home/nostalgia3/Music/`;
-// const TEMP_PATH = `D:/Music/mp3/`;
+// const `${this.settings.getString('music_path')}` = `/home/nostalgia3/Music/`;
+// const `${this.settings.getString('music_path')}` = `D:/Music/mp3/`;
 
 // const ipc = new DiscordIPC('1331978897146908723');
 
@@ -51,7 +51,8 @@ type Setting = {
 enum State {
     Normal,
     Lyrics,
-    FullQueue
+    FullQueue,
+    Settings
 };
 
 export function printSizeTree(s: Record<string, unknown>, indent = 0) {
@@ -67,7 +68,7 @@ class App extends utils.TypedEventEmitter<{
     click: [number, number, number, boolean],
     scroll: [number, number, number],
     keypress: [Keypress],
-    drag: [number, number, number, number, number],
+    drag: [number, [number, number], [number, number]],
     mouse_move: [number, number],
     music_start: [Track],
     music_resume: [Track],
@@ -117,6 +118,8 @@ class App extends utils.TypedEventEmitter<{
         // bg: color([255, 95, 109], [255, 195, 113])     // Sweet Morning
     };
 
+    protected settingsScroll: number;
+
     constructor() {
         super();
 
@@ -128,6 +131,8 @@ class App extends utils.TypedEventEmitter<{
         this.trackSel = 0;
         this.trackOff = 0;
 
+        this.settingsScroll = 0;
+
         this.settings = new SettingsManager('.config.json', {
             music_path: '',
             transparency: false
@@ -135,10 +140,13 @@ class App extends utils.TypedEventEmitter<{
 
         this.settings.setBool('transparency', true);
 
-        // this.player.getVolume()
+        if(this.settings.getString('music_path') == '') {
+            this.settings.setString('music_path', prompt(`Where is your music?`) ?? '');
+        }
+
         this.volume = 1;
 
-        this.state = State.Normal;
+        this.state = State.Settings;
 
         this.dragX = 0;
         this.dragY = 0;
@@ -164,8 +172,6 @@ class App extends utils.TypedEventEmitter<{
         this.updateUI();
 
         this.nt = ui.layout(this.size.w, this.size.h, 0, 0, this.ui);
-
-        // this.rend.setTransparency(true);
     }
 
     updateUI() {
@@ -196,6 +202,7 @@ class App extends utils.TypedEventEmitter<{
             ui.text({ fg: color('#FFF') }, `${minutesPlayed}:${secondsPlayed.toString().padStart(2,'0')}`),
             ui.hprogress({ fg: color('#FFF'), bg: color('#888'), h: Size.static(1), thin: true }, Math.floor(this.player.getPosition()), Math.floor(this.player.getTotalLength()), 'play'),
             ui.text({ fg: color('#FFF') }, `${totalMinutes}:${totalSeconds.toString().padStart(2,'0')}`),
+            ui.panel({ w: Size.static(9) }, [ ui.button({ fg: color('#000'), bg: color('#FFF'), h: Size.static(1) }, 'Settings', 'open-settings') ])
         ], 'playbar');
 
         const trackStyle: Partial<ItuiStyle> = {
@@ -223,7 +230,26 @@ class App extends utils.TypedEventEmitter<{
                         ui.panel({ bg: color('#323'), h: Size.static(3), w: Size.static(6) })
                     ]),
                     ui.panel({ bg: color('#000'), grow: 3 }),
-                ]), playbar ])
+                ]), playbar ]);
+            break; }
+
+            case State.Settings: {
+                this.ui = ui.panel({
+                    bg: color('#222'),
+                    z: 2,
+                    child_dir: Direction.Vertical
+                }, [
+                    ui.panel({ bg: color('#444'), h: Size.static(1), z: 1 }, [
+                        ui.text({}, 'Settings', 'title-settings'),
+                        ui.panel({}),
+                        ui.button({ fg: color('#000'), bg: color('#F33') }, 'X', 'close-settings')
+                    ], 'settings-controls'),
+                    ui.scrollPanel({ child_dir: Direction.Vertical, padding: Padding.same(1) }, this.settingsScroll, [
+                        ...Object.keys(this.settings.c).map((v, i)=>{
+                            return ui.panel({ fg: color('#fff'), h: Size.static(1), bg: color((i%2) ? '#666' : '#555') }, [ui.text({}, `${v} ${typeof(this.settings.c[v])}`), ui.panel({}), ui.text({}, `(${this.settings.c[v]})`) ])
+                        })
+                    ])
+                ]);
             break; }
 
             case State.Normal: {
@@ -263,23 +289,13 @@ class App extends utils.TypedEventEmitter<{
                     bg: this.theme.bg
                 }, [
                     ui.panel({}, [
-                        // Future modals?!?!
-                        // ui.panel({
-                        //     position: [Size.percentage(50), Size.percentage(50)],
-                        //     bg: color('#FF0000'),
-                        //     w: Size.static(30),
-                        //     h: Size.static(15),
-                        //     z: 1,
-                        //     child_dir: Direction.Vertical
-                        // }, [
-                        //     ui.text({ bg: color('#444') }, 'Hello')
-                        // ]),
                         ui.panel({
                             child_dir: Direction.Horizontal,
                             title: 'Tracks'
                         }, [
                             ui.scrollPanel({
-                                child_dir: Direction.Vertical
+                                child_dir: Direction.Vertical,
+                                fg: color('#FFF')
                             }, this.trackOff, [
                                 ...this.tracks.map((v,i)=>{
                                     const fg = (i==this.trackSel)? this.theme.selected_song_fg : this.theme.primary_fg;
@@ -329,6 +345,7 @@ class App extends utils.TypedEventEmitter<{
         utils.disableMouse();
         utils.setAltBuffer(false);
         utils.showCursor();
+        app.settings.save();
         Deno.exit(0);
     }
 
@@ -337,12 +354,12 @@ class App extends utils.TypedEventEmitter<{
     }
 
     async start() {
-        const f = Deno.readDirSync(`${TEMP_PATH}`);
+        const f = Deno.readDirSync(`${this.settings.getString('music_path')}`);
 
         for(const entry of f) {
             if(!entry.isFile) continue;
             if(path.extname(entry.name) != '.mp3') continue;
-            const tags = await getFileID3(`${TEMP_PATH}/${entry.name}`);
+            const tags = await getFileID3(`${this.settings.getString('music_path')}/${entry.name}`);
 
             this.tracks.push({ file: entry.name, tag: tags });
             this.queue.push({ file: entry.name, tag: tags })
@@ -393,6 +410,12 @@ class App extends utils.TypedEventEmitter<{
                 } else if(button >= 0 && button <= 3) {
                     // mouse button click
                     this.emit('click', button, x, y, released);
+                    if(!released) {
+                        this.dragX = x;
+                        this.dragY = y;
+                    } else {
+                        this.emit('drag', button, [this.dragX, this.dragY], [x, y])
+                    }
                 } else if(button == 64) {
                     // scroll up
                     this.emit('scroll', -1, x, y);
@@ -505,15 +528,15 @@ class App extends utils.TypedEventEmitter<{
         this.nt = ui.layout(this.size.w, this.size.h, 0, 0, this.ui);
         const tracks = ui.getElementById(this.nt, 'tracks');
         if(!tracks) return;
-        if(!this.settings.getBool('transparent')) {
-            tracks.style.bg = [
-                utils.interpolate(this.theme.bg[0], this.theme.bg[1], tracks.y/this.size.h),
-                utils.interpolate(this.theme.bg[0], this.theme.bg[1], tracks.h/this.size.h)
-            ];
-        } else {
-            tracks.style.bg = color('#000');
-        }
+        tracks.style.bg = [
+            utils.interpolate(this.theme.bg[0], this.theme.bg[1], tracks.y/this.size.h),
+            utils.interpolate(this.theme.bg[0], this.theme.bg[1], tracks.h/this.size.h)
+        ];
         this.renderNode(tracks);
+    }
+
+    drawSettings() {
+        this.render();
     }
 
     handleClick(x: number, y: number) {
@@ -537,6 +560,16 @@ class App extends utils.TypedEventEmitter<{
 
             case 'forwards':
                 this.playNextInQueue();
+                this.render();
+            break;
+
+            case 'close-settings':
+                this.state = State.Normal;
+                this.render();
+            break;
+
+            case 'open-settings':
+                this.state = State.Settings;
                 this.render();
             break;
         }
@@ -604,7 +637,7 @@ class App extends utils.TypedEventEmitter<{
     }
 
     playSelectedTrack() {
-        this.player.loadFile(path.join(TEMP_PATH, this.tracks[this.trackSel].file));
+        this.player.loadFile(path.join(`${this.settings.getString('music_path')}`, this.tracks[this.trackSel].file));
         this.player.play(0);
         this.activeTrack = this.tracks[this.trackSel];
         this.queueSel = this.trackSel;
@@ -612,7 +645,7 @@ class App extends utils.TypedEventEmitter<{
 
     playCurrentInQueue() {
         if(!this.activeTrack) return;
-        this.player.loadFile(path.join(TEMP_PATH, this.activeTrack.file));
+        this.player.loadFile(path.join(`${this.settings.getString('music_path')}`, this.activeTrack.file));
         this.player.play(0);
         this.activeTrack = this.queue[this.queueSel];
     }
@@ -624,7 +657,7 @@ class App extends utils.TypedEventEmitter<{
             this.queueSel--;
         }
 
-        this.player.loadFile(path.join(TEMP_PATH, this.queue[this.queueSel].file));
+        this.player.loadFile(path.join(`${this.settings.getString('music_path')}`, this.queue[this.queueSel].file));
         this.player.play(0);
         this.activeTrack = this.queue[this.queueSel];
     }
@@ -636,7 +669,7 @@ class App extends utils.TypedEventEmitter<{
             this.queueSel++;
         }
 
-        this.player.loadFile(path.join(TEMP_PATH, this.queue[this.queueSel].file));
+        this.player.loadFile(path.join(`${this.settings.getString('music_path')}`, this.queue[this.queueSel].file));
         this.player.play(0);
         this.activeTrack = this.queue[this.queueSel];
     }

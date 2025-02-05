@@ -164,7 +164,7 @@ export type RenderCommand
 export class Itui {
     protected parseSize(size: Size = Size.grow(), v: number): { v: number, type: 'consume' | 'grow' | 'shrink' } {
         switch(size.type) {
-            case "percentage": return { v: Math.ceil(v * Math.min(size.val, 1)), type: 'consume' };
+            case "percentage": return { v: Math.floor(v * Math.min(size.val, 1)), type: 'consume' };
             case "grow": return { v, type: 'grow' };
             case "static": return { v: size.val, type: 'consume' };
         }
@@ -192,25 +192,29 @@ export class Itui {
         const dir = node.style.child_dir ?? Direction.Horizontal;
 
         const cW = this.parseSize(node.style.w, w); // (node.style.w?.type == 'percentage') ? { v: w }
-        const cH = this.parseSize(node.style.h, h); // (node.style.h?.type == 'percentage') ? { v: h }
+        const cH = this.parseSize(node.style.h, h);
         let cX = x;
         let cY = y;
 
         if(node.style.position) {
             // floating window; ignore all the rules and put wherever we want!!!
-            cX = Math.floor((this.parseSize(node.style.position[0], w).v+cW.v)/2);
-            cY = Math.floor((this.parseSize(node.style.position[1], h).v)/2);
+            cX = Math.ceil((this.parseSize(node.style.position[0], w).v)/2);
+            cY = Math.ceil((this.parseSize(node.style.position[1], h).v)/2);
         }
 
         switch(node.type) {
             case 'panel':
-            case 'text':
             case 'hprogress':
             case 'vscrollbar':
             case 'scrollPanel':
             case 'button':
             case 'image':
                 sNode = ({ ...node, children: [], x: cX, y: cY, w: cW.v, h: cH.v }) as SizeNode;
+            break;
+
+            case 'text':
+                sNode = ({ ...node, children: [], x: cX, y: cY, w: cW.v, h: cH.v }) as SizeNode;
+                sNode.content = (sNode.content as string).slice(0, Math.max(cW.v, w));
             break;
 
             default:
@@ -260,7 +264,10 @@ export class Itui {
                 : this.parseSize(node.children[i].style.h, cH.v)
             ;
 
-            const size = ((s.type == 'consume') ? s.v : Math.floor(((node.children[i].style.grow??1)/grow_node_count)*free_space));
+            node.children[i].style.z = (node.children[i].style.z ?? 0) + (node.style.z ?? 0);
+            node.children[i].style.fg = (node.children[i].style.fg ?? node.style.fg);
+
+            let size = ((s.type == 'consume') ? s.v : Math.floor(((node.children[i].style.grow??1)/grow_node_count)*free_space));
 
             // This is REALLY bad; it completely scrolls past full elements,
             // which is not what should happen (e.g. a panel within a
@@ -268,8 +275,8 @@ export class Itui {
             // high)
             if(node.type == 'scrollPanel') {
                 if(sPercentage < (node.content as number)) {
-                    sPercentage += (size);
-                    continue;
+                    sPercentage++;
+                    size--;
                 }
             }
 
@@ -349,7 +356,7 @@ export class Itui {
             break;
 
             case 'text':
-                renderCommands.push({ _id: node.id ?? '?', z: node.style.z ?? 0, type: 'text', x: node.x, y: node.y, text: `${(node.content as string).slice(0, node.w)}`, fg: node.style.fg });
+                renderCommands.push({ _id: node.id ?? '?', z: node.style.z ?? 0, type: 'text', x: node.x, y: node.y, text: `${(node.content as string)}`, fg: node.style.fg, bg: node.style.bg });
             break;
 
             case 'hprogress': {
@@ -393,8 +400,11 @@ export class Itui {
         return renderCommands;
     }
 
-    protected i_click(nt: SizeNode, x: number, y: number) {
+    protected i_click(n: SizeNode, x: number, y: number) {
         let nodesClicked: SizeNode[] = [];
+
+        const nt = Object.assign({}, n);
+        nt.children.sort((a,b)=>((a.style.z??0)-(b.style.z??0)));
 
         if(
             x >= nt.x && x <= nt.x+nt.w &&
