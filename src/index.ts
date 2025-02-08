@@ -64,6 +64,11 @@ export function printSizeTree(s: Record<string, unknown>, indent = 0) {
 
 const ui = new Itui();
 
+function removeAnsiEscapeCodes(str: string) {
+    // deno-lint-ignore no-control-regex
+    return str.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><~]/g, '');
+};
+
 class App extends utils.TypedEventEmitter<{
     click: [number, number, number, boolean],
     scroll: [number, number, number],
@@ -146,7 +151,7 @@ class App extends utils.TypedEventEmitter<{
 
         this.volume = 1;
 
-        this.state = State.Settings;
+        this.state = State.Normal;
 
         this.dragX = 0;
         this.dragY = 0;
@@ -477,10 +482,21 @@ class App extends utils.TypedEventEmitter<{
         const commands = ui.draw(n).sort((a,b)=>(a.z-b.z));
         for(const command of commands) {
             try {
+                const before = this.rend.s.length;
                 switch(command.type) {
                     case 'text': {
                         const comm = command;
                         this.rend.text(comm.x, comm.y, comm.text, comm.fg, comm.bg);
+
+                        const nonAnsi = removeAnsiEscapeCodes(this.rend.s.slice(before)).length;
+                        const totalCharacters = this.rend.s.length-before;
+                        const percentAnsi = 100 - (nonAnsi / totalCharacters * 100);
+
+                        // console.log(
+                        //     `text (${command.x}, ${command.y}, ${comm.text.length})`.padEnd(25),
+                        //    isNaN(percentAnsi) ? '0% ansi' : (percentAnsi.toFixed(2) + '% ansi'),
+                        //     `\t${totalCharacters-nonAnsi}/${totalCharacters} ansi`
+                        // );
                     break; }
 
                     case 'rect': {
@@ -489,19 +505,43 @@ class App extends utils.TypedEventEmitter<{
                             this.rend.box(comm.x, comm.y, comm.w, comm.h, comm.title, color('#FFF'), comm.bg);
                         else
                             this.rend.rect(comm.x, comm.y, comm.w, comm.h, comm.bg);
+
+                        const notAnsi = removeAnsiEscapeCodes(this.rend.s.slice(before)).length;
+                        const totalCharacters = this.rend.s.length-before;
+                        const percentAnsi = 100 - (notAnsi/totalCharacters * 100);
+
+                        // console.log(
+                        //     `${comm.title ? 'box  ' : 'rect '}(${command.x}, ${command.y}, ${command.w}, ${command.h})`.padEnd(25),
+                        //     isNaN(percentAnsi) ? '0% ansi' : (percentAnsi.toFixed(2) + '% ansi'),
+                        //     `\t${totalCharacters-notAnsi}/${totalCharacters} ansi`
+                        // );
                     break; }
 
                     case 'vline': {
                         const comm = command;
                         this.rend.hline(comm.x, comm.y, comm.w, comm.fg ?? color('#000'), comm.bg);
+                        const notAnsi = removeAnsiEscapeCodes(this.rend.s.slice(before)).length;
+                        const totalCharacters = this.rend.s.length-before;
+                        const percentAnsi = 100 - (notAnsi/totalCharacters * 100);
+
+                        // console.log(
+                        //     `vline(${command.x}, ${command.y}, ${command.w})`.padEnd(25),
+                        //     isNaN(percentAnsi) ? '0% ansi' : (percentAnsi.toFixed(2) + '% ansi'),
+                        //     `\t${totalCharacters-notAnsi}/${totalCharacters} ansi`
+                        // );
                     break; }
                 }
             } catch(e) {
                 console.log(command);
-                throw e;
+                this.exit();
             }
         }
 
+        const notAnsi = removeAnsiEscapeCodes(this.rend.s).length;
+        const totalCharacters = this.rend.s.length;
+        const percentAnsi = 100 - (notAnsi/totalCharacters * 100);
+
+        // console.log(`total % ansi = ${percentAnsi.toFixed(2)}%, whitespace% = ${(100 - this.rend.s.replaceAll(' ', '').length/totalCharacters * 100).toFixed(2)}%`);
         this.rend.draw();
     }
 
@@ -524,15 +564,16 @@ class App extends utils.TypedEventEmitter<{
     }
 
     drawTracks() {
-        this.updateUI();
-        this.nt = ui.layout(this.size.w, this.size.h, 0, 0, this.ui);
-        const tracks = ui.getElementById(this.nt, 'tracks');
-        if(!tracks) return;
-        tracks.style.bg = [
-            utils.interpolate(this.theme.bg[0], this.theme.bg[1], tracks.y/this.size.h),
-            utils.interpolate(this.theme.bg[0], this.theme.bg[1], tracks.h/this.size.h)
-        ];
-        this.renderNode(tracks);
+        this.render();
+        // this.updateUI();
+        // this.nt = ui.layout(this.size.w, this.size.h, 0, 0, this.ui);
+        // const tracks = ui.getElementById(this.nt, 'tracks');
+        // if(!tracks) return;
+        // tracks.style.bg = [
+        //     utils.interpolate(this.theme.bg[0], this.theme.bg[1], tracks.y/this.size.h),
+        //     utils.interpolate(this.theme.bg[0], this.theme.bg[1], tracks.h/this.size.h)
+        // ];
+        // this.renderNode(tracks);
     }
 
     drawSettings() {

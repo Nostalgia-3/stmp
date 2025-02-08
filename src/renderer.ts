@@ -3,7 +3,7 @@ import * as utils from "./utils.ts";
 import { TextStyles } from "./utils.ts";
 
 export class Renderer {
-    protected s: string;
+    public s: string;
     protected c: [utils.RGB, utils.RGB][];
     protected width: number;
     protected height: number;
@@ -59,6 +59,7 @@ export class Renderer {
             }
         } else if(this.transparency && c.join('') == '000' && c.join('') != this.lastBG.join('')) {
             this.s += `\x1b[0m`;
+            this.lastFG = [0,0,0];
             this.lastBG = [0,0,0];
         } else if(c.join('') != this.lastBG.join('')) {
             this.s += utils.frgb(c, false);
@@ -91,7 +92,8 @@ export class Renderer {
             const col = utils.interpolate(bg[0], bg[1], i/this.height);
             for(let j=0;j<this.width;j++)
                 this.setBG(j, i, col);
-            this.s += `${utils.cursorTo(0, i)}${utils.frgb(col, false)}${''.padStart(this.width, ' ')}`;
+            this.writeBG(0, i, col);
+            this.s += `${utils.cursorTo(0, i)}\x1b[0J`; // {''.padStart(this.width, ' ')}
         }
     }
 
@@ -103,8 +105,8 @@ export class Renderer {
             const bgc = bg ? utils.interpolate(bg[0], bg[1], i/s.length) : this.getBG(x+i,y); // undefined
             if(fgc) this.setFG(x + i, y, fgc);
             if(bgc) this.setBG(x + i, y, bgc);
-            this.writeBG(x + i, y, bgc);
             this.writeFG(x + i, y, fgc);
+            this.writeBG(x + i, y, bgc);
             this.s += `${s[i]}`;
         }
 
@@ -130,28 +132,32 @@ export class Renderer {
         if(isNaN(w)) return;
 
         this.s += utils.cursorTo(x,y);
-        if(fg && fg[0] == fg[1]) this.s += `${utils.frgb(fg[0], true)}`;
-        if(bg && bg[0] == bg[1]) this.s += `${utils.frgb(bg[0], false)}`;
+        // if(fg && fg[0] == fg[1]) this.s += `${utils.frgb(fg[0], true)}`;
+        // if(bg && bg[0] == bg[1]) this.s += `${utils.frgb(bg[0], false)}`;
 
         for(let i=0;i<w;i++) {
             const fgc = utils.interpolate(fg[0], fg[1], i/w);
-            const bgc = bg ? utils.interpolate(bg[0], bg[1], i/w) : this.getBG(x, y+i);
+            const bgc = bg ? utils.interpolate(bg[0], bg[1], i/w) : undefined;
             this.setFG(x+i, y, fgc);
-            if(bg) this.setBG(x+i, y, bgc);
+            if(bgc) this.setBG(x+i, y, bgc);
             this.writeFG(x+i, y, fgc);
+            this.writeBG(x+i, y, bgc);
             this.s += `${ch}`;
         }
     }
 
     rect(x: number, y: number, w: number, h: number, bg?: utils.Gradient) {
-        if(w >= this.width && h >= this.height) this.clear(bg ?? color('#000'));
+        if(w >= this.width && h >= this.height) {
+            this.clear(bg ?? color('#000'));
+            return;
+        }
         if(!bg) {
             if(!this.transparency) return;
-
+            
             for(let i=0;i<h;i++) {
                 for(let j=0;j<w;j++)
                     this.setBG(x+j, y+i, [0,0,0]);
-                this.s += `${utils.cursorTo(x,y+i)}${''.padStart(w)}`;
+                this.s += `${utils.cursorTo(x,y+i)}${''.padStart(w,' ')}`;
             }
 
             return;
@@ -163,6 +169,7 @@ export class Renderer {
             for(let j=0;j<w;j++)
                 this.setBG(x+j, y+i, col);
             this.writeBG(x, y+i, col);
+            // ${''.padStart((w-(w%8))/8, '\t')}${''.padStart(w%8)}
             this.s += `${utils.cursorTo(x,y+i)}${''.padStart(w)}`;
         }
     }

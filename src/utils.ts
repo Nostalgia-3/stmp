@@ -126,7 +126,7 @@ export class TypedEventEmitter<TEvents extends Record<string, any>> {
 }
 
 export function enableStyles(styles: Partial<TextStyles>) {
-    let st = `\x1b[`;
+    let st = `\x9b`;
 
     if(styles.bold) st += `1;`;
     if(styles.faint) st += `2;`;
@@ -137,13 +137,13 @@ export function enableStyles(styles: Partial<TextStyles>) {
     if(styles.hidden) st += `8;`;
     if(styles.strikethrough) st += `9;`;
 
-    if(st == `\x1b[`) return ``;
+    if(st == `\x9b`) return ``;
     if(st.endsWith(';')) return st.substring(0, st.length-1) + 'm';
     return ``;
 }
 
 export function disableStyles(styles: Partial<TextStyles>) {
-    let st = `\x1b[`;
+    let st = `\x9b`;
 
     if(styles.bold) st += `22;`;
     if(styles.faint) st += `22;`;
@@ -154,7 +154,7 @@ export function disableStyles(styles: Partial<TextStyles>) {
     if(styles.hidden) st += `28;`;
     if(styles.strikethrough) st += `29;`;
 
-    if(st == `\x1b[`) return ``;
+    if(st == `\x9b`) return ``;
     if(st.endsWith(';')) return st.substring(0, st.length-1) + 'm';
     return ``;
 }
@@ -183,6 +183,7 @@ export function interpolate(c1: RGB, c2: RGB, f: number): RGB {
 }
 
 export function write(s: string) {
+    // console.log(s.length);
     writeAllSync(Deno.stderr, new TextEncoder().encode(s));
 }
 
@@ -225,11 +226,11 @@ export function frgb(rgb: RGB, foreground: boolean, convert?: '16-color' | '256-
 
         // Return the closest terminal color index
         if(foreground) {
-            if(closestColorIndex < 8) return `\x1b[3${closestColorIndex}m`;
-            return `\x1b[9${closestColorIndex-8}m`;
+            if(closestColorIndex < 8) return `\x9b3${closestColorIndex}m`;
+            return `\x9b9${closestColorIndex-8}m`;
         } else {
-            if(closestColorIndex < 8) return `\x1b[4${closestColorIndex}m`;
-            return `\x1b[10${closestColorIndex-8}m`;
+            if(closestColorIndex < 8) return `\x9b4${closestColorIndex}m`;
+            return `\x9b10${closestColorIndex-8}m`;
         }
     } else if(convert == '256-color') {
         const colorCube = [];
@@ -270,13 +271,13 @@ export function frgb(rgb: RGB, foreground: boolean, convert?: '16-color' | '256-
             }
         }
 
-        if(foreground) return `\x1b[38;5;${closestColorIndex}m`;
-        else return `\x1b[48;5;${closestColorIndex}m`
+        if(foreground) return `\x9b38;5;${closestColorIndex}m`;
+        else return `\x9b48;5;${closestColorIndex}m`
     } else {
         if(foreground)
-            return `\x1b[38;2;${rgb[0]};${rgb[1]};${rgb[2]}m`;
+            return `\x9b38;2;${rgb[0]};${rgb[1]};${rgb[2]}m`;
         else
-            return `\x1b[48;2;${rgb[0]};${rgb[1]};${rgb[2]}m`;
+            return `\x9b48;2;${rgb[0]};${rgb[1]};${rgb[2]}m`;
     }
 }
 
@@ -300,11 +301,11 @@ export function parseHexColor(hex: string): RGB {
 }
 
 export function cursorTo(x: number, y: number) {
-    return `\x1b[${y+1};${x+1}H`;
+    return `\x9b${y+1};${x+1}H`;
 }
 
 export function cursorDown(i: number = 1) {
-    return `\x1b[${i}B`;
+    return `\x9b${i}B`;
 }
 
 export function bell() {
@@ -317,11 +318,11 @@ export function enableMouse() {
     // mouse ?? = 1006
     // mouse ??? = 1015
     // 1003
-    write(`\x1b[?1000;1003;1006;1015h`);
+    write(`\x9b?1000;1003;1006;1015h`);
 }
 
 export function disableMouse() {
-    write(`\x1b[?1000;1003;1006;1015l`);
+    write(`\x9b?1000;1003;1006;1015l`);
 }
 
 export function setTitle(title: string) {
@@ -329,20 +330,20 @@ export function setTitle(title: string) {
 }
 
 export function setCursor(shape: CursorShape) {
-    write(`\x1b[${shape} q`);
+    write(`\x9b${shape} q`);
 }
 
 export function showCursor() {
-    write(`\x1b[?25h`);
+    write(`\x9b?25h`);
 }
 
 export function hideCursor() {
-    write(`\x1b[?25l`);
+    write(`\x9b?25l`);
 }
 
 export function setAltBuffer(alt: boolean) {
-    if(alt) write(`\x1b[?1049h`);
-    else    write(`\x1b[?1049l`);
+    if(alt) write(`\x9b?1049h`);
+    else    write(`\x9b?1049l`);
 }
 
 /**
